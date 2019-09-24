@@ -14,19 +14,20 @@ import com.alibaba.fastjson.serializer.SerializerFeature;
  * @author wenshao[szujobs@hotmail.com]
  */
 @Retention(RetentionPolicy.RUNTIME)
-@Target({ ElementType.TYPE })
+@Target({ ElementType.TYPE })//@JSONType是配置在类上的
 public @interface JSONType {
 
     boolean asm() default true;
 
-    String[] orders() default {};
+    String[] orders() default {};//顺序
 
     /**
      * @since 1.2.6
      */
-    String[] includes() default {};
-
-    String[] ignores() default {};
+    //配置在类上的就会只装配列举的字段，
+    String[] includes() default {};//@JSONType(includes = {"name","sex"})
+    //配置在类上的就会只装配列举的字段，
+    String[] ignores() default {};//@JSONType(ignores ={"id", "sex"}) 
 
     SerializerFeature[] serialzeFeatures() default {};
     Feature[] parseFeatures() default {};
@@ -40,7 +41,7 @@ public @interface JSONType {
     /**
      * @since 1.2.11
      */
-    String typeName() default "";
+    String typeName() default "";//类型名称
 
     /**
      * @since 1.2.32

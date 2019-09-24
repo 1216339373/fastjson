@@ -11,7 +11,7 @@ import java.lang.annotation.Target;
  *
  */
 @Retention(RetentionPolicy.RUNTIME)
-@Target({ ElementType.TYPE })
+@Target({ ElementType.TYPE })/** Class, interface (including annotation type), or enum declaration */
 public @interface JSONPOJOBuilder {
     /**
      * Property to use for re-defining which zero-argument method
@@ -21,7 +21,7 @@ public @interface JSONPOJOBuilder {
      *<p>
      * Default value is "build".
      */
-    public String buildMethod() default "build";
+    public String buildMethod() default "build";//@JSONPOJOBuilder(buildMethod="")
 
     /**
      * Property used for (re)defining name prefix to use for
@@ -37,6 +37,6 @@ public @interface JSONPOJOBuilder {
      * would be used for binding JSON property "value" (using type
      * indicated by the argument; or one defined with annotations.
      */
-    public String withPrefix() default "with";
+    public String withPrefix() default "with";//@JSONPOJOBuilder(withPrefix="")
 
 }

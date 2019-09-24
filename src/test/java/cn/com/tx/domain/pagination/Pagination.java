@@ -6,8 +6,6 @@ import java.util.List;
 
 /**
  * 分页工具
- * @author KongLei
- *
  * @param <T>
  */
 public class Pagination<T> implements Serializable {

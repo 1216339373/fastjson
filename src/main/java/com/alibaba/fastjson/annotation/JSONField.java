@@ -34,15 +34,15 @@ public @interface JSONField {
      * @since 1.1.42
      * @return
      */
-    int ordinal() default 0;
+    int ordinal() default 0;//顺序
 
-    String name() default "";
+    String name() default "";//@JSONField(name="")
 
-    String format() default "";
+    String format() default "";//日期格式@JSONField(format="")
 
-    boolean serialize() default true;
+    boolean serialize() default true;//序列化
 
-    boolean deserialize() default true;
+    boolean deserialize() default true;//反序列化
 
     SerializerFeature[] serialzeFeatures() default {};
 
@@ -60,20 +60,20 @@ public @interface JSONField {
      * 
      * @since 1.2.16
      */
-    Class<?> serializeUsing() default Void.class;
+    Class<?> serializeUsing() default Void.class;//序列化用的class文件
     
     /**
      * Deserializer class to use for deserializing associated value. 
      * 
      * @since 1.2.16 
      */
-    Class<?> deserializeUsing() default Void.class;
+    Class<?> deserializeUsing() default Void.class;//反序列化用的class文件
 
     /**
      * @since 1.2.21
      * @return the alternative names of the field when it is deserialized
      */
-    String[] alternateNames() default {};
+    String[] alternateNames() default {};//反序列化转名字
 
     /**
      * @since 1.2.31

@@ -95,7 +95,7 @@ public class NotifyDetail implements Serializable {
 
 	/*
 	 * (non-Javadoc)
-	 * 
+	 * 复写了hashcode
 	 * @see java.lang.Object#hashCode()
 	 */
 	@Override
@@ -109,7 +109,7 @@ public class NotifyDetail implements Serializable {
 
 	/*
 	 * (non-Javadoc)
-	 * 
+	 * 复写了equals
 	 * @see java.lang.Object#equals(java.lang.Object)
 	 */
 	@Override
