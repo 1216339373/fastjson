@@ -31,6 +31,7 @@ import java.util.List;
 import static com.alibaba.fastjson.util.IOUtils.replaceChars;
 
 /**
+ * 序列化输出的关键类
  * @author wenshao[szujobs@hotmail.com]
  */
 public final class SerializeWriter extends Writer {
@@ -52,16 +53,19 @@ public final class SerializeWriter extends Writer {
         }
     }
 
-    protected char                           buf[];
 
     /**
      * The number of chars in the buffer.
+     * 缓冲区大小
      */
-    protected int                            count;
+    protected int  count;
+    //缓冲区
+    protected char  buf[];
 
     protected int                            features;
 
-    private final Writer                     writer;
+    //java输出流
+    private final Writer   writer;
 
     protected boolean                        useSingleQuotes;
     protected boolean                        quoteFieldNames;
@@ -81,23 +85,9 @@ public final class SerializeWriter extends Writer {
     protected boolean                        browserSecure;
     protected long                           sepcialBits;
 
-    public SerializeWriter(){
-        this((Writer) null);
-    }
-
-    public SerializeWriter(Writer writer){
-        this(writer, JSON.DEFAULT_GENERATE_FEATURE, SerializerFeature.EMPTY);
-    }
-
-    public SerializeWriter(SerializerFeature... features){
-        this(null, features);
-    }
-
-    public SerializeWriter(Writer writer, SerializerFeature... features){
-        this(writer, 0, features);
-    }
-
+/*********构造函数**********************/
     /**
+     * 主构造函数
      * @since 1.2.9
      * @param writer
      * @param defaultFeatures
@@ -122,37 +112,21 @@ public final class SerializeWriter extends Writer {
 
         computeFeatures();
     }
-
-    public int getMaxBufSize() {
-        return maxBufSize;
-    }
-
-    public void setMaxBufSize(int maxBufSize) {
-        if (maxBufSize < this.buf.length) {
-            throw new JSONException("must > " + buf.length);
-        }
-
-        this.maxBufSize = maxBufSize;
-    }
-
-    public int getBufferLength() {
-        return this.buf.length;
-    }
-
     public SerializeWriter(int initialSize){
-        this(null, initialSize);
-    }
-
+    	this(null, initialSize);
+    }    
     public SerializeWriter(Writer writer, int initialSize){
-        this.writer = writer;
-
-        if (initialSize <= 0) {
-            throw new IllegalArgumentException("Negative initial size: " + initialSize);
-        }
-        buf = new char[initialSize];
-
-        computeFeatures();
+    	this.writer = writer;
+    	
+    	if (initialSize <= 0) {
+    		throw new IllegalArgumentException("Negative initial size: " + initialSize);
+    	}
+    	buf = new char[initialSize];
+    	
+    	computeFeatures();
     }
+
+/*********构造函数*结束*********************/
 
     public void config(SerializerFeature feature, boolean state) {
         if (state) {
@@ -293,6 +267,7 @@ public final class SerializeWriter extends Writer {
 
     }
 
+    //扩容
     public void expandCapacity(int minimumCapacity) {
         if (maxBufSize != -1 && minimumCapacity >= maxBufSize) {
             throw new JSONException("serialize exceeded MAX_OUTPUT_LENGTH=" + maxBufSize + ", minimumCapacity=" + minimumCapacity);
@@ -335,10 +310,10 @@ public final class SerializeWriter extends Writer {
 
     /**
      * Write a portion of a string to the buffer.
-     * 
+     * 往缓冲区输出
      * @param str String to be written from
-     * @param off Offset from which to start reading characters
-     * @param len Number of characters to be written
+     * @param off起始位置  Offset from which to start reading characters
+     * @param len长度         Number of characters to be written
      */
     public void write(String str, int off, int len) {
         int newcount = count + len;
@@ -443,67 +418,9 @@ public final class SerializeWriter extends Writer {
         }
     }
 
-    private int encodeToUTF8(OutputStream out) throws IOException {
-
-        int bytesLength = (int) (count * (double) 3);
-        byte[] bytes = bytesBufLocal.get();
-
-        if (bytes == null) {
-            bytes = new byte[1024 * 8];
-            bytesBufLocal.set(bytes);
-        }
-
-        if (bytes.length < bytesLength) {
-            bytes = new byte[bytesLength];
-        }
-
-        int position = IOUtils.encodeUTF8(buf, 0, count, bytes);
-        out.write(bytes, 0, position);
-        return position;
-    }
     
-    private byte[] encodeToUTF8Bytes() {
-        int bytesLength = (int) (count * (double) 3);
-        byte[] bytes = bytesBufLocal.get();
-
-        if (bytes == null) {
-            bytes = new byte[1024 * 8];
-            bytesBufLocal.set(bytes);
-        }
-
-        if (bytes.length < bytesLength) {
-            bytes = new byte[bytesLength];
-        }
-
-        int position = IOUtils.encodeUTF8(buf, 0, count, bytes);
-        byte[] copy = new byte[position];
-        System.arraycopy(bytes, 0, copy, 0, position);
-        return copy;
-    }
-    
-    public int size() {
-        return count;
-    }
-
-    public String toString() {
-        return new String(buf, 0, count);
-    }
-
-    /**
-     * Close the stream. This method does not release the buffer, since its contents might still be required. Note:
-     * Invoking this method in this class will have no effect.
-     */
-    public void close() {
-        if (writer != null && count > 0) {
-            flush();
-        }
-        if (buf.length <= BUFFER_THRESHOLD) {
-            bufLocal.set(buf);
-        }
-
-        this.buf = null;
-    }
-
+/************write*输出各种类型*text**************************/
+  
     public void write(String text) {
         if (text == null) {
             writeNull();
@@ -1738,14 +1655,6 @@ public final class SerializeWriter extends Writer {
         }
     }
 
-    public void write(boolean value) {
-        if (value) {
-            write("true");
-        } else {
-            write("false");
-        }
-    }
-
     public void writeFieldValue(char seperator, String name, int value) {
         if (value == Integer.MIN_VALUE || !quoteFieldNames) {
             write(seperator);
@@ -2151,13 +2060,7 @@ public final class SerializeWriter extends Writer {
         }
     }
 
-    private void writeEnumFieldValue(char seperator, String name, String value) {
-        if (useSingleQuotes) {
-            writeFieldValue(seperator, name, value);
-        } else {
-            writeFieldValueStringWithDoubleQuote(seperator, name, value);
-        }
-    }
+
 
     public void writeFieldValue(char seperator, String name, BigDecimal value) {
         write(seperator);
@@ -2196,6 +2099,47 @@ public final class SerializeWriter extends Writer {
         } else {
             String text = new String(chars);
             writeStringWithDoubleQuote(text, (char) 0);
+        }
+    }
+
+
+    public void writeFieldName(String key) {
+        writeFieldName(key, false);
+    }
+
+    public void writeFieldName(String key, boolean checkSpecial) {
+        if (key == null) {
+            write("null:");
+            return;
+        }
+
+        if (useSingleQuotes) {
+            if (quoteFieldNames) {
+                writeStringWithSingleQuote(key);
+                write(':');
+            } else {
+                writeKeyWithSingleQuoteIfHasSpecial(key);
+            }
+        } else {
+            if (quoteFieldNames) {
+                writeStringWithDoubleQuote(key, ':');
+            } else {
+                boolean hashSpecial = key.length() == 0;
+                for (int i = 0; i < key.length(); ++i) {
+                    char ch = key.charAt(i);
+                    boolean special = (ch < 64 && (sepcialBits & (1L << ch)) != 0) || ch == '\\';
+                    if (special) {
+                        hashSpecial = true;
+                        break;
+                    }
+                }
+                if (hashSpecial) {
+                    writeStringWithDoubleQuote(key, ':');
+                } else {
+                    write(key);
+                    write(':');
+                }
+            }
         }
     }
 
@@ -2366,46 +2310,8 @@ public final class SerializeWriter extends Writer {
         buf[count - 1] = '\'';
     }
 
-    public void writeFieldName(String key) {
-        writeFieldName(key, false);
-    }
-
-    public void writeFieldName(String key, boolean checkSpecial) {
-        if (key == null) {
-            write("null:");
-            return;
-        }
-
-        if (useSingleQuotes) {
-            if (quoteFieldNames) {
-                writeStringWithSingleQuote(key);
-                write(':');
-            } else {
-                writeKeyWithSingleQuoteIfHasSpecial(key);
-            }
-        } else {
-            if (quoteFieldNames) {
-                writeStringWithDoubleQuote(key, ':');
-            } else {
-                boolean hashSpecial = key.length() == 0;
-                for (int i = 0; i < key.length(); ++i) {
-                    char ch = key.charAt(i);
-                    boolean special = (ch < 64 && (sepcialBits & (1L << ch)) != 0) || ch == '\\';
-                    if (special) {
-                        hashSpecial = true;
-                        break;
-                    }
-                }
-                if (hashSpecial) {
-                    writeStringWithDoubleQuote(key, ':');
-                } else {
-                    write(key);
-                    write(':');
-                }
-            }
-        }
-    }
-
+    
+    //如果有特殊字符，输出key带单引号
     private void writeKeyWithSingleQuoteIfHasSpecial(String text) {
         final byte[] specicalFlags_singleQuotes = IOUtils.specicalFlags_singleQuotes;
 
@@ -2506,20 +2412,126 @@ public final class SerializeWriter extends Writer {
 
         buf[newcount - 1] = ':';
     }
+    
+    private void writeEnumFieldValue(char seperator, String name, String value) {
+        if (useSingleQuotes) {
+            writeFieldValue(seperator, name, value);
+        } else {
+            writeFieldValueStringWithDoubleQuote(seperator, name, value);
+        }
+    }
+    
+    private int encodeToUTF8(OutputStream out) throws IOException {
 
+        int bytesLength = (int) (count * (double) 3);
+        byte[] bytes = bytesBufLocal.get();
+
+        if (bytes == null) {
+            bytes = new byte[1024 * 8];
+            bytesBufLocal.set(bytes);
+        }
+
+        if (bytes.length < bytesLength) {
+            bytes = new byte[bytesLength];
+        }
+
+        int position = IOUtils.encodeUTF8(buf, 0, count, bytes);
+        out.write(bytes, 0, position);
+        return position;
+    }
+    
+    private byte[] encodeToUTF8Bytes() {
+        int bytesLength = (int) (count * (double) 3);
+        byte[] bytes = bytesBufLocal.get();
+
+        if (bytes == null) {
+            bytes = new byte[1024 * 8];
+            bytesBufLocal.set(bytes);
+        }
+
+        if (bytes.length < bytesLength) {
+            bytes = new byte[bytesLength];
+        }
+
+        int position = IOUtils.encodeUTF8(buf, 0, count, bytes);
+        byte[] copy = new byte[position];
+        System.arraycopy(bytes, 0, copy, 0, position);
+        return copy;
+    }    
+    
+/*************小的函数************/
     public void flush() {
-        if (writer == null) {
-            return;
+    	if (writer == null) {
+    		return;
+    	}
+    	
+    	try {
+    		writer.write(buf, 0, count);
+    		writer.flush();
+    	} catch (IOException e) {
+    		throw new JSONException(e.getMessage(), e);
+    	}
+    	count = 0;
+    }
+    /**
+     * 关闭流，不释放缓存
+     * Close the stream. This method does not release the buffer, since its contents might still be required. Note:
+     * Invoking this method in this class will have no effect.
+     */
+    public void close() {
+        if (writer != null && count > 0) {
+            flush();
+        }
+        if (buf.length <= BUFFER_THRESHOLD) {
+            bufLocal.set(buf);
         }
 
-        try {
-            writer.write(buf, 0, count);
-            writer.flush();
-        } catch (IOException e) {
-            throw new JSONException(e.getMessage(), e);
-        }
-        count = 0;
+        this.buf = null;
     }
 
+    public void write(boolean value) {
+        if (value) {
+            write("true");
+        } else {
+            write("false");
+        }
+    }
+    public int size() {
+        return count;
+    }
 
+    public String toString() {
+        return new String(buf, 0, count);
+    }
+/**************重载********************************/
+    public int getMaxBufSize() {
+        return maxBufSize;
+    }
+
+    public void setMaxBufSize(int maxBufSize) {
+        if (maxBufSize < this.buf.length) {
+            throw new JSONException("must > " + buf.length);
+        }
+
+        this.maxBufSize = maxBufSize;
+    }
+
+    public int getBufferLength() {
+        return this.buf.length;
+    }
+    public SerializeWriter(){
+        this((Writer) null);
+    }
+
+    public SerializeWriter(Writer writer){
+        this(writer, JSON.DEFAULT_GENERATE_FEATURE, SerializerFeature.EMPTY);
+    }
+
+    public SerializeWriter(SerializerFeature... features){
+        this(null, features);
+    }
+
+    public SerializeWriter(Writer writer, SerializerFeature... features){
+        this(writer, 0, features);
+    }
 }
