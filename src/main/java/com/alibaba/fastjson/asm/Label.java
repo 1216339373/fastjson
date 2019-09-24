@@ -187,6 +187,8 @@ public class Label {
      * given code writer.
      */
     void resolve(final MethodWriter owner, final int position, final byte[] data) {
+    	//a|=b的意思就是把a和b按位或然后赋值给a 按位或的意思就是先把a和b都换成2进制，然后用或操作，相当于a=a|b
+    	// this.status=this.status|2
         this.status |= 2 /* RESOLVED */ ;
         this.position = position;
         int i = 0;

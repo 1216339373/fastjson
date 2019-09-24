@@ -28,6 +28,7 @@ import static com.alibaba.fastjson.parser.JSONToken.*;
 
 /**
  * @author wenshao[szujobs@hotmail.com]
+ * 抽象类
  */
 public abstract class JSONLexerBase implements JSONLexer, Closeable {
 
@@ -99,6 +100,7 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
         for (;;) {
             pos = bp;
 
+            //识别到斜杠就是跳过注释
             if (ch == '/') {
                 skipComment();
                 continue;

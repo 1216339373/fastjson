@@ -17,19 +17,20 @@ package com.alibaba.fastjson.parser;
 
 /**
  * @author wenshao[szujobs@hotmail.com]
+ * 枚举常量类json令牌，给不同的常量符号 设置 一个编号
  */
 public class JSONToken {
 
     //
     public final static int ERROR                = 1;
     //
-    public final static int LITERAL_INT          = 2;
+    public final static int LITERAL_INT          = 2;//int整形
     //
-    public final static int LITERAL_FLOAT        = 3;
+    public final static int LITERAL_FLOAT        = 3;//浮点
     //
     public final static int LITERAL_STRING       = 4;
     //
-    public final static int LITERAL_ISO8601_DATE = 5;
+    public final static int LITERAL_ISO8601_DATE = 5;//iso8601
 
     public final static int TRUE                 = 6;
     //
@@ -37,7 +38,7 @@ public class JSONToken {
     //
     public final static int NULL                 = 8;
     //
-    public final static int NEW                  = 9;
+    public final static int NEW                  = 9;// new  新类型
     //
     public final static int LPAREN               = 10; // ("("),
     //
@@ -53,22 +54,22 @@ public class JSONToken {
     //
     public final static int COMMA                = 16; // (","),
     //
-    public final static int COLON                = 17; // (":"),
+    public final static int COLON                = 17; //冒号 (":"),
     //
-    public final static int IDENTIFIER           = 18;
+    public final static int IDENTIFIER           = 18;//"ident"
     //
-    public final static int FIELD_NAME           = 19;
+    public final static int FIELD_NAME           = 19;//"fieldName"
 
-    public final static int EOF                  = 20;
+    public final static int EOF                  = 20;//eof  end of file
 
-    public final static int SET                  = 21;
-    public final static int TREE_SET             = 22;
+    public final static int SET                  = 21;//Set
+    public final static int TREE_SET             = 22;//TreeSet
     
-    public final static int UNDEFINED            = 23; // undefined
+    public final static int UNDEFINED            = 23; //未定义 undefined
 
-    public final static int SEMI                 = 24;
-    public final static int DOT                  = 25;
-    public final static int HEX                  = 26;
+    public final static int SEMI                 = 24;//分号
+    public final static int DOT                  = 25;//点号
+    public final static int HEX                  = 26;// hex  十六进制
 
     public static String name(int value) {
         switch (value) {

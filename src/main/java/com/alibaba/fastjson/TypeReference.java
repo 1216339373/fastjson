@@ -27,6 +27,7 @@ import com.alibaba.fastjson.util.TypeUtils;
  * parameters, such as {@code Class<?>} or {@code List<? extends CharSequence>}.
  */
 public class TypeReference<T> {
+	//初始化大小16，扩容银子0.75，层级1
     static ConcurrentMap<Type, Type> classTypeCache
             = new ConcurrentHashMap<Type, Type>(16, 0.75f, 1);
 
@@ -60,6 +61,7 @@ public class TypeReference<T> {
      */
     protected TypeReference(Type... actualTypeArguments){
         Class<?> thisClass = this.getClass();
+        //获取泛型的真实类型
         Type superClass = thisClass.getGenericSuperclass();
 
         ParameterizedType argType = (ParameterizedType) ((ParameterizedType) superClass).getActualTypeArguments()[0];

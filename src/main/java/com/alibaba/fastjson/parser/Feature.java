@@ -143,6 +143,7 @@ public enum Feature {
     ErrorOnEnumNotMatch
     ;
 
+	//构造方法
     Feature(){
         mask = (1 << ordinal());
     }

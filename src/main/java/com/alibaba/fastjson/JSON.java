@@ -35,7 +35,6 @@ import com.alibaba.fastjson.parser.deserializer.FieldTypeResolver;
 import com.alibaba.fastjson.parser.deserializer.ParseProcess;
 import com.alibaba.fastjson.serializer.*;
 import com.alibaba.fastjson.util.IOUtils;
-import com.alibaba.fastjson.util.IdentityHashMap;
 import com.alibaba.fastjson.util.TypeUtils;
 
 /**
@@ -58,7 +57,7 @@ import com.alibaba.fastjson.util.TypeUtils;
  * String json = "[{},...]";
  * Type listType = new TypeReference&lt;List&lt;Model&gt;&gt;() {}.getType();
  * List&lt;Model&gt; modelList = JSON.parseObject(json, listType);
- * </pre>
+ * </pre>如果是泛型，一定要指定泛型类型
  * 
  * @see com.alibaba.fastjson.TypeReference
  * 
