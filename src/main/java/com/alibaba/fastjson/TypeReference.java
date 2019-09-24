@@ -12,6 +12,7 @@ import com.alibaba.fastjson.util.ParameterizedTypeImpl;
 import com.alibaba.fastjson.util.TypeUtils;
 
 /** 
+ * 通用类型，泛型
  * Represents a generic type {@code T}. Java doesn't yet provide a way to
  * represent generic types, so this class does. Forces clients to create a
  * subclass of this class which enables retrieval the type information even at
@@ -31,9 +32,18 @@ public class TypeReference<T> {
     static ConcurrentMap<Type, Type> classTypeCache
             = new ConcurrentHashMap<Type, Type>(16, 0.75f, 1);
 
-    protected final Type type;
-
+    protected final Type type;//类型
+    //List<String>类型
+    public final static Type LIST_STRING = new TypeReference<List<String>>() {}.getType();
     /**
+     * Gets underlying {@code Type} instance.
+     */
+    public Type getType() {
+        return type;
+    }
+    
+    /**
+     * 构造函数
      * Constructs a new type literal. Derives represented class from type
      * parameter.
      *
@@ -122,13 +132,5 @@ public class TypeReference<T> {
         Type key = new ParameterizedTypeImpl(argTypes, thisClass, rawType);
         return key;
     }
-    
-    /**
-     * Gets underlying {@code Type} instance.
-     */
-    public Type getType() {
-        return type;
-    }
 
-    public final static Type LIST_STRING = new TypeReference<List<String>>() {}.getType();
 }

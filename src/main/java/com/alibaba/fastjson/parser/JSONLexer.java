@@ -38,8 +38,10 @@ public interface JSONLexer {
 
     void skipWhitespace();
 
+    //next token type 获取下一个json字符是什么类型
     void nextToken();
 
+    //
     void nextToken(int expect);
 
     char getCurrent();
@@ -54,7 +56,7 @@ public interface JSONLexer {
 
     void scanNumber();
 
-    int pos();
+    int pos();//当前扫描位置
 
     Number integerValue();
 

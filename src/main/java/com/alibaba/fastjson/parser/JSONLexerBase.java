@@ -29,45 +29,65 @@ import static com.alibaba.fastjson.parser.JSONToken.*;
 /**
  * @author wenshao[szujobs@hotmail.com]
  * 抽象类
+ * 扫描类，解析的核心类
+ * Closeable接口就一个close方法
  */
 public abstract class JSONLexerBase implements JSONLexer, Closeable {
 
-    protected void lexError(String key, Object... args) {
-        token = ERROR;
-    }
+	public int matchStat  = UNKNOWN;
+    //token存放当前读取的字符的类型
+    protected int token;
+    /** 记录当前扫描字符位置 */
+    protected int pos;
+    protected int features;
+    /** 当前有效字符 */
+    protected char  ch;
+    protected int   bp;
 
-    protected int                            token;
-    protected int                            pos;
-    protected int                            features;
+    protected int   eofPos;
 
-    protected char                           ch;
-    protected int                            bp;
-
-    protected int                            eofPos;
-
-    /**
+    /**字符缓冲区 构造函数初始化大小512
      * A character buffer for literals.
      */
-    protected char[]                         sbuf;
-    protected int                            sp;
+    protected char[]   sbuf;
+    /** 字符缓冲区的索引，指向下一个可写
+     *  字符的位置，也代表字符缓冲区字符数量
+     */
+    protected int  sp;
 
     /**
      * number start position
      */
-    protected int                            np;
+    protected int   np;
+    //是否包含特殊字符
+    protected boolean  hasSpecial;
+    protected Calendar calendar  = null;
+    protected TimeZone timeZone  = JSON.defaultTimeZone;
+    protected Locale   locale  = JSON.defaultLocale;
 
-    protected boolean                        hasSpecial;
-
-    protected Calendar                       calendar           = null;
-    protected TimeZone                       timeZone           = JSON.defaultTimeZone;
-    protected Locale                         locale             = JSON.defaultLocale;
-
-    public int                               matchStat          = UNKNOWN;
+    protected String  stringDefaultValue = null;
+    
+    protected static final long  MULTMIN_RADIX_TEN     = Long.MIN_VALUE / 10;
+    protected static final int   INT_MULTMIN_RADIX_TEN = Integer.MIN_VALUE / 10;
+    protected final static int[] digits                = new int[(int) 'f' + 1];
+    protected final static char[] typeFieldName = ("\"" + JSON.DEFAULT_TYPE_KEY + "\":\"").toCharArray();
 
     private final static ThreadLocal<char[]> SBUF_LOCAL         = new ThreadLocal<char[]>();
 
-    protected String                         stringDefaultValue = null;
 
+    static {
+        for (int i = '0'; i <= '9'; ++i) {
+            digits[i] = i - '0';
+        }
+
+        for (int i = 'a'; i <= 'f'; ++i) {
+            digits[i] = (i - 'a') + 10;
+        }
+        for (int i = 'A'; i <= 'F'; ++i) {
+            digits[i] = (i - 'A') + 10;
+        }
+    }
+    
     public JSONLexerBase(int features){
         this.features = features;
 
@@ -76,62 +96,56 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
         }
 
         sbuf = SBUF_LOCAL.get();
-
+        //初始化缓冲区512
         if (sbuf == null) {
             sbuf = new char[512];
         }
     }
 
-    public final int matchStat() {
-        return matchStat;
-    }
-
-    /**
-     * internal method, don't invoke
-     * @param token
-     */
-    public void setToken(int token) {
-        this.token = token;
-    }
-
+    //读取下一个   类型
     public final void nextToken() {
+    	//缓冲区字符的位置，也代表字符缓冲区字符数量
         sp = 0;
 
         for (;;) {
-            pos = bp;
+            pos = bp;//当前有效字符记录当前扫描位置
 
+            //ch是当前有效字符
             //识别到斜杠就是跳过注释
             if (ch == '/') {
                 skipComment();
                 continue;
             }
-
+            //"是字符
             if (ch == '"') {
                 scanString();
                 return;
             }
-
+            //逗号是读取下一个
             if (ch == ',') {
                 next();
-                token = COMMA;
+                token = COMMA;//COMMA逗号
                 return;
             }
-
+            //0~9是数字
             if (ch >= '0' && ch <= '9') {
                 scanNumber();
                 return;
             }
-
+            //负数
             if (ch == '-') {
                 scanNumber();
                 return;
             }
 
             switch (ch) {
+            	//读取到单引号
                 case '\'':
+                	//不允许单引号，异常
                     if (!isEnabled(Feature.AllowSingleQuotes)) {
                         throw new JSONException("Feature.AllowSingleQuotes is false");
                     }
+                    //允许扫描单引号
                     scanStringSingleQuote();
                     return;
                 case ' ':
@@ -157,14 +171,17 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
                 case 'u': // undefined
                     scanIdent();
                     return;
+                //左圆括号    
                 case '(':
                     next();
                     token = LPAREN;
                     return;
+                //右圆括号
                 case ')':
                     next();
                     token = RPAREN;
                     return;
+                //左方括号    
                 case '[':
                     next();
                     token = LBRACKET;
@@ -193,14 +210,17 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
                     next();
                     token = DOT;
                     return;
+                //正数    
                 case '+':
                     next();
                     scanNumber();
                     return;
+                //16进制    
                 case 'x':
                     scanHex();
                     return;
                 default:
+                	//读取结束
                     if (isEOF()) { // JLS
                         if (token == EOF) {
                             throw new JSONException("EOF error");
@@ -224,6 +244,7 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
 
     }
 
+    //下一个指定的json字符种类  ，比如指定{ 跳到下一个{
     public final void nextToken(int expect) {
         sp = 0;
 
@@ -374,10 +395,12 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
         }
     }
 
+    
+    //下一个冒号
     public final void nextTokenWithColon() {
         nextTokenWithChar(':');
     }
-
+    //跳到下一个指定字符类型
     public final void nextTokenWithChar(char expect) {
         sp = 0;
 
@@ -397,21 +420,12 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
         }
     }
 
-    public final int token() {
-        return token;
-    }
+
 
     public final String tokenName() {
         return JSONToken.name(token);
     }
 
-    public final int pos() {
-        return pos;
-    }
-
-    public final String stringDefaultValue() {
-        return stringDefaultValue;
-    }
 
     public final Number integerValue() throws NumberFormatException {
         long result = 0;
@@ -542,15 +556,7 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
         return (this.features & feature) != 0 || (features & feature) != 0;
     }
 
-    public abstract String numberString();
 
-    public abstract boolean isEOF();
-
-    public final char getCurrent() {
-        return ch;
-    }
-
-    public abstract char charAt(int index);
 
     // public final char next() {
     // ch = doNext();
@@ -560,40 +566,7 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
     // return ch;
     // }
 
-    public abstract char next();
-
-    protected void skipComment() {
-        next();
-        if (ch == '/') {
-            for (;;) {
-                next();
-                if (ch == '\n') {
-                    next();
-                    return;
-                } else if (ch == EOI) {
-                    return;
-                }
-            }
-        } else if (ch == '*') {
-            next();
-
-            for (; ch != EOI;) {
-                if (ch == '*') {
-                    next();
-                    if (ch == '/') {
-                        next();
-                        return;
-                    } else {
-                        continue;
-                    }
-                }
-                next();
-            }
-        } else {
-            throw new JSONException("invalid comment");
-        }
-    }
-
+    
     public final String scanSymbol(final SymbolTable symbolTable) {
         skipWhitespace();
 
@@ -635,7 +608,6 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
 
     // public abstract String scanSymbol(final SymbolTable symbolTable, final char quote);
 
-    protected abstract void arrayCopy(int srcPos, char[] dest, int destPos, int length);
 
     public final String scanSymbol(final SymbolTable symbolTable, final char quote) {
         int hash = 0;
@@ -873,7 +845,6 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
         // return symbolTable.addSymbol(buf, np, sp, hash);
     }
 
-    protected abstract void copyTo(int offset, int count, char[] dest);
 
     public final void scanString() {
         np = bp;
@@ -1093,7 +1064,7 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
         }
     }
 
-    public abstract byte[] bytesValue();
+
 
     public void close() {
         if (sbuf.length <= 1024 * 8) {
@@ -1113,7 +1084,6 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
                 && charAt(np + 4) == 'f';
     }
 
-    protected final static char[] typeFieldName = ("\"" + JSON.DEFAULT_TYPE_KEY + "\":\"").toCharArray();
 
     public final int scanType(String type) {
         matchStat = UNKNOWN;
@@ -1198,37 +1168,7 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
         return true;
     }
 
-    public int matchField(long fieldNameHash) {
-        throw new UnsupportedOperationException();
-    }
-
-    public boolean seekArrayToItem(int index) {
-        throw new UnsupportedOperationException();
-    }
-
-    public int seekObjectToField(long fieldNameHash, boolean deepScan) {
-        throw new UnsupportedOperationException();
-    }
-
-    public int seekObjectToField(long[] fieldNameHash) {
-        throw new UnsupportedOperationException();
-    }
-
-    public int seekObjectToFieldDeepScan(long fieldNameHash) {
-        throw new UnsupportedOperationException();
-    }
-
-    public void skipObject() {
-        throw new UnsupportedOperationException();
-    }
-
-    public void skipObject(boolean valid) {
-        throw new UnsupportedOperationException();
-    }
-
-    public void skipArray() {
-        throw new UnsupportedOperationException();
-    }
+    
 
     public abstract int indexOf(char ch, int startIndex);
 
@@ -1657,7 +1597,7 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
         }
     }
 
-    @SuppressWarnings("unchecked")
+
     public Collection<String> scanFieldStringArray(char[] fieldName, Class<?> type) {
         matchStat = UNKNOWN;
 
@@ -4654,7 +4594,6 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
     public final void scanNullOrNew() {
         scanNullOrNew(true);
     }
-
     public final void scanNullOrNew(boolean acceptColon) {
         if (ch != 'n') {
             throw new JSONException("error parse null or new");
@@ -4798,11 +4737,6 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
         }
     }
 
-    public abstract String stringVal();
-
-    public abstract String subString(int offset, int count);
-
-    protected abstract char[] sub_chars(int offset, int count);
 
     public static String readString(char[] chars, int chars_len) {
         char[] sbuf = new char[chars_len];
@@ -4889,8 +4823,8 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
         return new String(sbuf, 0, len);
     }
 
-    protected abstract boolean charArrayCompare(char[] chars);
 
+//空行输入
     public boolean isBlankInput() {
         for (int i = 0;; ++i) {
             char chLocal = charAt(i);
@@ -4907,6 +4841,7 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
         return true;
     }
 
+    //跳过空格
     public final void skipWhitespace() {
         for (;;) {
             if (ch <= '/') {
@@ -4930,6 +4865,273 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
         }
     }
 
+    //读取16进制
+    public final void scanHex() {
+    	//必须是以x'结尾 否则不处理
+        if (ch != 'x') {
+            throw new JSONException("illegal state. " + ch);
+        }
+        next();
+        if (ch != '\'') {
+            throw new JSONException("illegal state. " + ch);
+        }
+
+        np = bp;
+        next();
+
+        if (ch == '\'') {
+            next();
+            token = JSONToken.HEX;
+            return;
+        }
+
+        //for(;;)也可以
+        for (int i = 0;;++i) {
+            char ch = next();
+            //读到0~9 A~F 正常，继续往下读
+            if ((ch >= '0' && ch <= '9') || (ch >= 'A' && ch <= 'F')) {
+                sp++;
+                continue;
+            } else if (ch == '\'') {
+            	//如果读到单引号，结束跳出
+                sp++;
+                next();
+                break;
+            } else {
+                throw new JSONException("illegal state. " + ch);
+            }
+        }
+        token = JSONToken.HEX;
+    }
+
+    //扫描数字
+    public final void scanNumber() {
+        np = bp;
+
+        if (ch == '-') {
+            sp++;
+            next();
+        }
+
+        //读到0~9，继续
+        for (;;) {
+            if (ch >= '0' && ch <= '9') {
+                sp++;
+            } else {
+                break;
+            }
+            next();
+        }
+
+        boolean isDouble = false;
+
+        //如果读到.小数点，表示小数
+        if (ch == '.') {
+            sp++;
+            next();
+            isDouble = true;
+
+            for (;;) {
+                if (ch >= '0' && ch <= '9') {
+                    sp++;
+                } else {
+                    break;
+                }
+                next();
+            }
+        }
+
+        if (ch == 'L') {
+            sp++;
+            next();
+        } else if (ch == 'S') {
+            sp++;
+            next();
+        } else if (ch == 'B') {
+            sp++;
+            next();
+        } else if (ch == 'F') {
+            sp++;
+            next();
+            isDouble = true;
+        } else if (ch == 'D') {
+            sp++;
+            next();
+            isDouble = true;
+        } else if (ch == 'e' || ch == 'E') {
+            sp++;
+            next();
+
+            if (ch == '+' || ch == '-') {
+                sp++;
+                next();
+            }
+
+            for (;;) {
+                if (ch >= '0' && ch <= '9') {
+                    sp++;
+                } else {
+                    break;
+                }
+                next();
+            }
+
+            if (ch == 'D' || ch == 'F') {
+                sp++;
+                next();
+            }
+
+            isDouble = true;
+        }
+
+        //根据isDouble判断是小数还是整数
+        if (isDouble) {
+            token = JSONToken.LITERAL_FLOAT;
+        } else {
+            token = JSONToken.LITERAL_INT;
+        }
+    }
+
+    public final long longValue() throws NumberFormatException {
+        long result = 0;
+        boolean negative = false;
+        long limit;
+        int digit;
+
+        if (np == -1) {
+            np = 0;
+        }
+
+        int i = np, max = np + sp;
+
+        if (charAt(np) == '-') {
+            negative = true;
+            limit = Long.MIN_VALUE;
+            i++;
+        } else {
+            limit = -Long.MAX_VALUE;
+        }
+        long multmin = MULTMIN_RADIX_TEN;
+        if (i < max) {
+            digit = charAt(i++) - '0';
+            result = -digit;
+        }
+        while (i < max) {
+            // Accumulating negatively avoids surprises near MAX_VALUE
+            char chLocal = charAt(i++);
+
+            if (chLocal == 'L' || chLocal == 'S' || chLocal == 'B') {
+                break;
+            }
+
+            digit = chLocal - '0';
+            if (result < multmin) {
+                throw new NumberFormatException(numberString());
+            }
+            result *= 10;
+            if (result < limit + digit) {
+                throw new NumberFormatException(numberString());
+            }
+            result -= digit;
+        }
+
+        if (negative) {
+            if (i > np + 1) {
+                return result;
+            } else { /* Only got "-" */
+                throw new NumberFormatException(numberString());
+            }
+        } else {
+            return -result;
+        }
+    }
+
+    public final Number decimalValue(boolean decimal) {
+        char chLocal = charAt(np + sp - 1);
+        try {
+            if (chLocal == 'F') {
+                return Float.parseFloat(numberString());
+            }
+
+            if (chLocal == 'D') {
+                return Double.parseDouble(numberString());
+            }
+
+            if (decimal) {
+                return decimalValue();
+            } else {
+                return doubleValue();
+            }
+        } catch (NumberFormatException ex) {
+            throw new JSONException(ex.getMessage() + ", " + info());
+        }
+    }
+
+
+    public static boolean isWhitespace(char ch) {
+        // 专门调整了判断顺序
+        return ch <= ' '  &&
+              (ch == ' '  ||
+               ch == '\n' ||
+               ch == '\r' ||
+               ch == '\t' ||
+               ch == '\f' ||
+               ch == '\b');
+    }
+
+    
+    //跳过注释
+    protected void skipComment() {
+        next();
+        if (ch == '/') {
+            for (;;) {
+                next();
+                if (ch == '\n') {
+                    next();
+                    return;
+                } else if (ch == EOI) {
+                    return;
+                }
+            }
+        } else if (ch == '*') {
+            next();
+
+            for (; ch != EOI;) {
+                if (ch == '*') {
+                    next();
+                    if (ch == '/') {
+                        next();
+                        return;
+                    } else {
+                        continue;
+                    }
+                }
+                next();
+            }
+        } else {
+            throw new JSONException("invalid comment");
+        }
+    }
+    /**
+     * Append a character ch to sbuf.
+     * 在缓冲区sbuf末尾加上ch
+     */
+    protected final void putChar(char ch) {
+    	
+    	//如果缓冲区数组已经满了，扩容为2倍
+        if (sp == sbuf.length) {
+            char[] newsbuf = new char[sbuf.length * 2];
+            System.arraycopy(sbuf, 0, newsbuf, 0, sbuf.length);
+            sbuf = newsbuf;
+        }
+        sbuf[sp++] = ch;
+    }
+    
+    //当前错误信息赋给token，当前存储的字符类型为信息错误 ，可以去掉参数
+    protected void lexError(String key, Object... args) {
+        token = ERROR;
+    }
+    //扫描单引号  返回值为空
     private void scanStringSingleQuote() {
         np = bp;
         hasSpecial = false;
@@ -4941,6 +5143,7 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
                 break;
             }
 
+            //单引号没有闭合
             if (chLocal == EOI) {
                 if (!isEOF()) {
                     putChar((char) EOI);
@@ -4951,6 +5154,7 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
 
             if (chLocal == '\\') {
                 if (!hasSpecial) {
+                	//特殊字符
                     hasSpecial = true;
 
                     if (sp > sbuf.length) {
@@ -5063,243 +5267,97 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
         token = LITERAL_STRING;
         this.next();
     }
-
-    /**
-     * Append a character to sbuf.
-     */
-    protected final void putChar(char ch) {
-        if (sp == sbuf.length) {
-            char[] newsbuf = new char[sbuf.length * 2];
-            System.arraycopy(sbuf, 0, newsbuf, 0, sbuf.length);
-            sbuf = newsbuf;
-        }
-        sbuf[sp++] = ch;
+    
+    /*******get set方法************/
+    //拿到当前字符
+    public final char getCurrent() {
+        return ch;
     }
-
-    public final void scanHex() {
-        if (ch != 'x') {
-            throw new JSONException("illegal state. " + ch);
-        }
-        next();
-        if (ch != '\'') {
-            throw new JSONException("illegal state. " + ch);
-        }
-
-        np = bp;
-        next();
-
-        if (ch == '\'') {
-            next();
-            token = JSONToken.HEX;
-            return;
-        }
-
-        for (int i = 0;;++i) {
-            char ch = next();
-            if ((ch >= '0' && ch <= '9') || (ch >= 'A' && ch <= 'F')) {
-                sp++;
-                continue;
-            } else if (ch == '\'') {
-                sp++;
-                next();
-                break;
-            } else {
-                throw new JSONException("illegal state. " + ch);
-            }
-        }
-        token = JSONToken.HEX;
-    }
-
-    public final void scanNumber() {
-        np = bp;
-
-        if (ch == '-') {
-            sp++;
-            next();
-        }
-
-        for (;;) {
-            if (ch >= '0' && ch <= '9') {
-                sp++;
-            } else {
-                break;
-            }
-            next();
-        }
-
-        boolean isDouble = false;
-
-        if (ch == '.') {
-            sp++;
-            next();
-            isDouble = true;
-
-            for (;;) {
-                if (ch >= '0' && ch <= '9') {
-                    sp++;
-                } else {
-                    break;
-                }
-                next();
-            }
-        }
-
-        if (ch == 'L') {
-            sp++;
-            next();
-        } else if (ch == 'S') {
-            sp++;
-            next();
-        } else if (ch == 'B') {
-            sp++;
-            next();
-        } else if (ch == 'F') {
-            sp++;
-            next();
-            isDouble = true;
-        } else if (ch == 'D') {
-            sp++;
-            next();
-            isDouble = true;
-        } else if (ch == 'e' || ch == 'E') {
-            sp++;
-            next();
-
-            if (ch == '+' || ch == '-') {
-                sp++;
-                next();
-            }
-
-            for (;;) {
-                if (ch >= '0' && ch <= '9') {
-                    sp++;
-                } else {
-                    break;
-                }
-                next();
-            }
-
-            if (ch == 'D' || ch == 'F') {
-                sp++;
-                next();
-            }
-
-            isDouble = true;
-        }
-
-        if (isDouble) {
-            token = JSONToken.LITERAL_FLOAT;
-        } else {
-            token = JSONToken.LITERAL_INT;
-        }
-    }
-
-    public final long longValue() throws NumberFormatException {
-        long result = 0;
-        boolean negative = false;
-        long limit;
-        int digit;
-
-        if (np == -1) {
-            np = 0;
-        }
-
-        int i = np, max = np + sp;
-
-        if (charAt(np) == '-') {
-            negative = true;
-            limit = Long.MIN_VALUE;
-            i++;
-        } else {
-            limit = -Long.MAX_VALUE;
-        }
-        long multmin = MULTMIN_RADIX_TEN;
-        if (i < max) {
-            digit = charAt(i++) - '0';
-            result = -digit;
-        }
-        while (i < max) {
-            // Accumulating negatively avoids surprises near MAX_VALUE
-            char chLocal = charAt(i++);
-
-            if (chLocal == 'L' || chLocal == 'S' || chLocal == 'B') {
-                break;
-            }
-
-            digit = chLocal - '0';
-            if (result < multmin) {
-                throw new NumberFormatException(numberString());
-            }
-            result *= 10;
-            if (result < limit + digit) {
-                throw new NumberFormatException(numberString());
-            }
-            result -= digit;
-        }
-
-        if (negative) {
-            if (i > np + 1) {
-                return result;
-            } else { /* Only got "-" */
-                throw new NumberFormatException(numberString());
-            }
-        } else {
-            return -result;
-        }
-    }
-
-    public final Number decimalValue(boolean decimal) {
-        char chLocal = charAt(np + sp - 1);
-        try {
-            if (chLocal == 'F') {
-                return Float.parseFloat(numberString());
-            }
-
-            if (chLocal == 'D') {
-                return Double.parseDouble(numberString());
-            }
-
-            if (decimal) {
-                return decimalValue();
-            } else {
-                return doubleValue();
-            }
-        } catch (NumberFormatException ex) {
-            throw new JSONException(ex.getMessage() + ", " + info());
-        }
-    }
-
+    
+    /*******抽象方法************/
+    public abstract String numberString();
+    //是否是文件结尾
+    public abstract boolean isEOF();
+    public abstract byte[] bytesValue();
     public abstract BigDecimal decimalValue();
+    public abstract String stringVal();
+    public abstract String subString(int offset, int count);
+    public abstract char charAt(int index);
+    //光标读取下一个字符
+    public abstract char next();
+    
+    protected abstract boolean charArrayCompare(char[] chars);
+    protected abstract char[] sub_chars(int offset, int count);
+    protected abstract void arrayCopy(int srcPos, char[] dest, int destPos, int length);
+    protected abstract void copyTo(int offset, int count, char[] dest);
 
-    public static boolean isWhitespace(char ch) {
-        // 专门调整了判断顺序
-        return ch <= ' '  &&
-              (ch == ' '  ||
-               ch == '\n' ||
-               ch == '\r' ||
-               ch == '\t' ||
-               ch == '\f' ||
-               ch == '\b');
+    
+    /********不重要的方法***************/
+    /**
+     * internal method, don't invoke
+     * @param token
+     */
+    public void setToken(int token) {
+        this.token = token;
+    }
+    public final int token() {
+        return token;
+    }
+    public final int pos() {
+    	return pos;
+    }
+    public final String stringDefaultValue() {
+    	return stringDefaultValue;
+    }
+    public int getFeatures() {
+        return this.features;
+    }
+    public final int matchStat() {
+        return matchStat;
+    }
+    
+    /**********不支持操作异常************* 
+     * 
+     * 
+     * 
+     * 
+     * 
+     * 
+     * 
+     * 
+     * 
+     */
+    public int matchField(long fieldNameHash) {
+        throw new UnsupportedOperationException();
     }
 
-    protected static final long  MULTMIN_RADIX_TEN     = Long.MIN_VALUE / 10;
-    protected static final int   INT_MULTMIN_RADIX_TEN = Integer.MIN_VALUE / 10;
-
-    protected final static int[] digits                = new int[(int) 'f' + 1];
-
-    static {
-        for (int i = '0'; i <= '9'; ++i) {
-            digits[i] = i - '0';
-        }
-
-        for (int i = 'a'; i <= 'f'; ++i) {
-            digits[i] = (i - 'a') + 10;
-        }
-        for (int i = 'A'; i <= 'F'; ++i) {
-            digits[i] = (i - 'A') + 10;
-        }
+    public boolean seekArrayToItem(int index) {
+        throw new UnsupportedOperationException();
     }
 
+    public int seekObjectToField(long fieldNameHash, boolean deepScan) {
+        throw new UnsupportedOperationException();
+    }
+
+    public int seekObjectToField(long[] fieldNameHash) {
+        throw new UnsupportedOperationException();
+    }
+
+    public int seekObjectToFieldDeepScan(long fieldNameHash) {
+        throw new UnsupportedOperationException();
+    }
+
+    public void skipObject() {
+        throw new UnsupportedOperationException();
+    }
+
+    public void skipObject(boolean valid) {
+        throw new UnsupportedOperationException();
+    }
+
+    public void skipArray() {
+        throw new UnsupportedOperationException();
+    }
     /**
      * hsf support
      * @param fieldName
@@ -5313,9 +5371,5 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
 
     public boolean matchField2(char[] fieldName) {
         throw new UnsupportedOperationException();
-    }
-
-    public int getFeatures() {
-        return this.features;
     }
 }

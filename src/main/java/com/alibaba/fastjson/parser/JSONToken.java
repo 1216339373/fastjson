@@ -17,7 +17,7 @@ package com.alibaba.fastjson.parser;
 
 /**
  * @author wenshao[szujobs@hotmail.com]
- * 枚举常量类json令牌，给不同的常量符号 设置 一个编号
+ * 枚举常量类 json字符的种类，给不同的种类字符 设置 一个编号
  */
 public class JSONToken {
 
@@ -71,6 +71,7 @@ public class JSONToken {
     public final static int DOT                  = 25;//点号
     public final static int HEX                  = 26;// hex  十六进制
 
+    //根据枚举值返回类型名字，一共分成了26中json字符类型
     public static String name(int value) {
         switch (value) {
             case ERROR:
