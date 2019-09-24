@@ -59,9 +59,6 @@ public class JSONObject extends JSON implements Map<String, Object>, Cloneable, 
 
     private final Map<String, Object> map;
 
-    public JSONObject(){
-        this(DEFAULT_INITIAL_CAPACITY, false);
-    }
 
     public JSONObject(Map<String, Object> map){
         if (map == null) {
@@ -70,22 +67,18 @@ public class JSONObject extends JSON implements Map<String, Object>, Cloneable, 
         this.map = map;
     }
 
-    public JSONObject(boolean ordered){
-        this(DEFAULT_INITIAL_CAPACITY, ordered);
-    }
-
-    public JSONObject(int initialCapacity){
-        this(initialCapacity, false);
-    }
-
+    //初始化，是否有序
     public JSONObject(int initialCapacity, boolean ordered){
         if (ordered) {
+        	//有序，用linkedhashmap
             map = new LinkedHashMap<String, Object>(initialCapacity);
         } else {
+        	//无需用hash
             map = new HashMap<String, Object>(initialCapacity);
         }
     }
 
+ //------这一段重复了map的方法------   
     public int size() {
         return map.size();
     }
@@ -105,6 +98,7 @@ public class JSONObject extends JSON implements Map<String, Object>, Cloneable, 
     public Object get(Object key) {
         Object val = map.get(key);
 
+        //如果key是数值，则转成字符再拿一次
         if (val == null && key instanceof Number) {
             val = map.get(key.toString());
         }
@@ -113,16 +107,20 @@ public class JSONObject extends JSON implements Map<String, Object>, Cloneable, 
     }
 
     public JSONObject getJSONObject(String key) {
+    	//根据key去拿value
         Object value = map.get(key);
 
+        //如果取出的value是JSONObject 返回
         if (value instanceof JSONObject) {
             return (JSONObject) value;
         }
 
+        //如果取出的是map，则重新根据map构造成JSONObject
         if (value instanceof Map) {
             return new JSONObject((Map) value);
         }
 
+        //如果取出的是string， 继续用json解析成为jsonobject
         if (value instanceof String) {
             return JSON.parseObject((String) value);
         }
@@ -609,5 +607,18 @@ public class JSONObject extends JSON implements Map<String, Object>, Cloneable, 
         }
 
         return TypeUtils.castToJavaBean(this, clazz, config);
+    }
+    
+/**********重载构造方法****************************/
+    public JSONObject(){
+    	this(DEFAULT_INITIAL_CAPACITY, false);
+    }
+    //指定构造是否有序
+    public JSONObject(boolean ordered){
+        this(DEFAULT_INITIAL_CAPACITY, ordered);
+    }
+    //指定构造的容器大小
+    public JSONObject(int initialCapacity){
+        this(initialCapacity, false);
     }
 }

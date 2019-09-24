@@ -27,7 +27,7 @@ public class HSFJSONUtils {
 
         Object[] values;
         int token = lexer.token();
-        if (token == JSONToken.LBRACE) {
+        if (token == JSONToken.LBRACE) {//左括号{
             String[] typeNames = lexer.scanFieldStringArray(fieldName_argsTypes, -1, typeSymbolTable);
             if (typeNames == null && lexer.matchStat == NOT_MATCH_NAME) {
                 String type = lexer.scanFieldString(fieldName_type);
@@ -79,7 +79,7 @@ public class HSFJSONUtils {
 
                 parser.close();
             }
-        } else if (token == JSONToken.LBRACKET) {
+        } else if (token == JSONToken.LBRACKET) {//左方括号[
             String[] typeNames = lexer.scanFieldStringArray(null, -1, typeSymbolTable);
 
             lexer.skipWhitespace();

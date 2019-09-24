@@ -82,7 +82,7 @@ public class FastJsonConfig {
      * init param.
      */
     public FastJsonConfig() {
-
+    	//设置字符集U8
         this.charset = IOUtils.UTF8;
 
         this.serializeConfig = SerializeConfig.getGlobalInstance();
@@ -183,7 +183,7 @@ public class FastJsonConfig {
 
         if (classSerializeFilters == null)
             return;
-
+       
         for (Entry<Class<?>, SerializeFilter> entry : classSerializeFilters.entrySet())
 
             this.serializeConfig.addFilter(entry.getKey(), entry.getValue());

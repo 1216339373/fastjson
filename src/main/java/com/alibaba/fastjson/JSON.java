@@ -64,13 +64,13 @@ import com.alibaba.fastjson.util.TypeUtils;
  * @author wenshao[szujobs@hotmail.com]
  */
 public abstract class JSON implements JSONStreamAware, JSONAware {
-    public static TimeZone         defaultTimeZone      = TimeZone.getDefault();
-    public static Locale           defaultLocale        = Locale.getDefault();
+    public static TimeZone         defaultTimeZone      = TimeZone.getDefault();//时区
+    public static Locale           defaultLocale        = Locale.getDefault();//当地语言
     public static String           DEFAULT_TYPE_KEY     = "@type";
-    static final SerializeFilter[] emptyFilters         = new SerializeFilter[0];
     public static String           DEFFAULT_DATE_FORMAT = "yyyy-MM-dd HH:mm:ss";
-    public static int              DEFAULT_PARSER_FEATURE;
-    public static int              DEFAULT_GENERATE_FEATURE;
+    public static int    DEFAULT_PARSER_FEATURE;
+    public static int    DEFAULT_GENERATE_FEATURE;
+    static final SerializeFilter[] emptyFilters         = new SerializeFilter[0];
 
     private static final ConcurrentHashMap<Type, Type> mixInsMapper = new ConcurrentHashMap<Type, Type>(16);
     
@@ -143,21 +143,40 @@ public abstract class JSON implements JSONStreamAware, JSONAware {
                                                   typeKey.length(), 
                                                   typeKey.hashCode(), true);
     }
+
     
-    public static Object parse(String text) {
-        return parse(text, DEFAULT_PARSER_FEATURE);
+/***************JSON的parse部分**********************/
+ /*
+  *JSON的parse部分最终都是指向  DefaultJSONParser(text, config, features);
+  *和DefaultJSONParser(chars, position, ParserConfig.getGlobalInstance(), features);
+  *两个构造方法
+  */
+  //这两个方法是一组的   最终还是DefaultJSONParser
+    public static Object parse(byte[] input, Feature... features) {
+        char[] chars = allocateChars(input.length);
+        @SuppressWarnings("deprecation")
+		int len = IOUtils.decodeUTF8(input, 0, input.length, chars);
+        if (len < 0) {
+            return null;
+        }
+        return parse(new String(chars, 0, len), features);
     }
-
-    /**
-     *
-     * @since 1.2.38
-     */
-    public static Object parse(String text, ParserConfig config) {
-        return parse(text, config, DEFAULT_PARSER_FEATURE);
+    public static Object parse(String text, Feature... features) {
+    	
+    	
+    	int featureValues = DEFAULT_PARSER_FEATURE;
+    	for (Feature feature : features) {
+    		featureValues = Feature.config(featureValues, feature, true);
+    	}
+    	//这里还是调用了下面的Object parse 最终还是DefaultJSONParser(text, config, features);
+    	return parse(text, featureValues);
     }
-
+    //重载略过
+    public static Object parse(String text, int features) {
+    	return parse(text, ParserConfig.getGlobalInstance(), features);
+    }
     /**
-     *
+     *该parse方法是直接调用DefaultJson的parse
      * @since 1.2.38
      */
     public static Object parse(String text, ParserConfig config, int features) {
@@ -167,27 +186,12 @@ public abstract class JSON implements JSONStreamAware, JSONAware {
 
         DefaultJSONParser parser = new DefaultJSONParser(text, config, features);
         Object value = parser.parse();
-
         parser.handleResovleTask(value);
-
         parser.close();
-
         return value;
     }
 
-    public static Object parse(String text, int features) {
-        return parse(text, ParserConfig.getGlobalInstance(), features);
-    }
-
-    public static Object parse(byte[] input, Feature... features) {
-        char[] chars = allocateChars(input.length);
-        int len = IOUtils.decodeUTF8(input, 0, input.length, chars);
-        if (len < 0) {
-            return null;
-        }
-        return parse(new String(chars, 0, len), features);
-    }
-
+//这两个方法是一组
     public static Object parse(byte[] input, int off, int len, CharsetDecoder charsetDecoder, Feature... features) {
         if (input == null || input.length == 0) {
             return null;
@@ -212,30 +216,20 @@ public abstract class JSON implements JSONStreamAware, JSONAware {
         IOUtils.decode(charsetDecoder, byteBuf, charBuf);
 
         int position = charBuf.position();
-
+//仍然是调用DefaultJSONParser(chars, position, ParserConfig.getGlobalInstance(), features);
         DefaultJSONParser parser = new DefaultJSONParser(chars, position, ParserConfig.getGlobalInstance(), features);
         Object value = parser.parse();
-
         parser.handleResovleTask(value);
-
         parser.close();
-
         return value;
     }
-
-    public static Object parse(String text, Feature... features) {
-        int featureValues = DEFAULT_PARSER_FEATURE;
-        for (Feature feature : features) {
-            featureValues = Feature.config(featureValues, feature, true);
-        }
-
-        return parse(text, featureValues);
-    }
-
+/*****************parse部分结束********************/      
+/*****************parse object部分********************/   
+    
+    //这两个方法是调用上面的parse方法，最后通过DefaultJSONParser(text, config, features);
     public static JSONObject parseObject(String text, Feature... features) {
-        return (JSONObject) parse(text, features);
+    	return (JSONObject) parse(text, features);
     }
-
     public static JSONObject parseObject(String text) {
         Object obj = parse(text);
         if (obj instanceof JSONObject) {
@@ -249,75 +243,7 @@ public abstract class JSON implements JSONStreamAware, JSONAware {
         }
     }
 
-    /**
-     * <pre>
-     * String jsonStr = "[{\"id\":1001,\"name\":\"Jobs\"}]";
-     * List&lt;Model&gt; models = JSON.parseObject(jsonStr, new TypeReference&lt;List&lt;Model&gt;&gt;() {});
-     * </pre>
-     * @param text json string
-     * @param type type refernce
-     * @param features
-     * @return
-     */
-    @SuppressWarnings("unchecked")
-    public static <T> T parseObject(String text, TypeReference<T> type, Feature... features) {
-        return (T) parseObject(text, type.type, ParserConfig.global, DEFAULT_PARSER_FEATURE, features);
-    }
-
-    /**
-     * 
-     * This method deserializes the specified Json into an object of the specified class. It is not
-     * suitable to use if the specified class is a generic type since it will not have the generic
-     * type information because of the Type Erasure feature of Java. Therefore, this method should not
-     * be used if the desired type is a generic type. Note that this method works fine if the any of
-     * the fields of the specified object are generics, just the object itself should not be a
-     * generic type. For the cases when the object is of generic type, invoke
-     * {@link #parseObject(String, Type, Feature[])}. If you have the Json in a {@link InputStream} instead of
-     * a String, use {@link #parseObject(InputStream, Type, Feature[])} instead.
-     *
-     * @param json the string from which the object is to be deserialized
-     * @param clazz the class of T
-     * @param features parser features
-     * @return an object of type T from the string
-     * classOfT
-     */
-    @SuppressWarnings("unchecked")
-    public static <T> T parseObject(String json, Class<T> clazz, Feature... features) {
-        return (T) parseObject(json, (Type) clazz, ParserConfig.global, null, DEFAULT_PARSER_FEATURE, features);
-    }
-
-    @SuppressWarnings("unchecked")
-    public static <T> T parseObject(String text, Class<T> clazz, ParseProcess processor, Feature... features) {
-        return (T) parseObject(text, (Type) clazz, ParserConfig.global, processor, DEFAULT_PARSER_FEATURE,
-                               features);
-    }
-
-    /**
-     * This method deserializes the specified Json into an object of the specified type. This method
-     * is useful if the specified object is a generic type. For non-generic objects, use
-     * {@link #parseObject(String, Class, Feature[])} instead. If you have the Json in a {@link InputStream} instead of
-     * a String, use {@link #parseObject(InputStream, Type, Feature[])} instead.
-     *
-     * @param <T> the type of the desired object
-     * @param json the string from which the object is to be deserialized
-     * @param type The specific genericized type of src. You can obtain this type by using the
-     * {@link com.alibaba.fastjson.TypeReference} class. For example, to get the type for
-     * {@code Collection<Foo>}, you should use:
-     * <pre>
-     * Type type = new TypeReference&lt;Collection&lt;Foo&gt;&gt;(){}.getType();
-     * </pre>
-     * @return an object of type T from the string
-     */
-    @SuppressWarnings("unchecked")
-    public static <T> T parseObject(String json, Type type, Feature... features) {
-        return (T) parseObject(json, type, ParserConfig.global, DEFAULT_PARSER_FEATURE, features);
-    }
-
-    @SuppressWarnings("unchecked")
-    public static <T> T parseObject(String input, Type clazz, ParseProcess processor, Feature... features) {
-        return (T) parseObject(input, clazz, ParserConfig.global, processor, DEFAULT_PARSER_FEATURE, features);
-    }
-
+//直接通过Feature和DefaultJSONParser
     @SuppressWarnings("unchecked")
     public static <T> T parseObject(String input, Type clazz, int featureValues, Feature... features) {
         if (input == null) {
@@ -330,26 +256,76 @@ public abstract class JSON implements JSONStreamAware, JSONAware {
 
         DefaultJSONParser parser = new DefaultJSONParser(input, ParserConfig.getGlobalInstance(), featureValues);
         T value = (T) parser.parseObject(clazz);
-
         parser.handleResovleTask(value);
-
         parser.close();
-
         return (T) value;
     }
     
     /**
-     * @since 1.2.11
+     * 下面三个方法是一组的
+     * @since 1.2.55
      */
-    public static <T> T parseObject(String input, Type clazz, ParserConfig config, Feature... features) {
-        return parseObject(input, clazz, config, null, DEFAULT_PARSER_FEATURE, features);
-    }
+    @SuppressWarnings("unchecked")
+    public static <T> T parseObject(InputStream is, //
+                                    Charset charset, //
+                                    Type type, //
+                                    ParserConfig config, //
+                                    ParseProcess processor, //
+                                    int featureValues, //
+                                    Feature... features) throws IOException {
+        if (charset == null) {
+            charset = IOUtils.UTF8;
+        }
 
-    public static <T> T parseObject(String input, Type clazz, ParserConfig config, int featureValues,
-                                          Feature... features) {
-        return parseObject(input, clazz, config, null, featureValues, features);
-    }
+        byte[] bytes = allocateBytes(1024 * 64);
+        int offset = 0;
+        for (;;) {
+            int readCount = is.read(bytes, offset, bytes.length - offset);
+            if (readCount == -1) {
+                break;
+            }
+            offset += readCount;
+            if (offset == bytes.length) {
+                byte[] newBytes = new byte[bytes.length * 3 / 2];
+                System.arraycopy(bytes, 0, newBytes, 0, bytes.length);
+                bytes = newBytes;
+            }
+        }
 
+        return (T) parseObject(bytes, 0, offset, charset, type, config, processor, featureValues, features);
+    }
+    /**
+     * @since 1.2.55
+     */
+    @SuppressWarnings("unchecked")
+    public static <T> T parseObject(byte[] bytes, int offset, int len,
+                                    Charset charset,
+                                    Type clazz,
+                                    ParserConfig config,
+                                    ParseProcess processor,
+                                    int featureValues,
+                                    Feature... features) {
+        if (charset == null) {
+            charset = IOUtils.UTF8;
+        }
+
+        String strVal;
+        if (charset == IOUtils.UTF8) {
+            char[] chars = allocateChars(bytes.length);
+            @SuppressWarnings("deprecation")
+			int chars_len = IOUtils.decodeUTF8(bytes, offset, len, chars);
+            if (chars_len < 0) {
+                return null;
+            }
+            strVal = new String(chars, 0, chars_len);
+        } else {
+            if (len < 0) {
+                return null;
+            }
+            strVal = new String(bytes, offset, len, charset);
+        }
+        return (T) parseObject(strVal, clazz, config, processor, featureValues, features);
+    }
     @SuppressWarnings("unchecked")
     public static <T> T parseObject(String input, Type clazz, ParserConfig config, ParseProcess processor,
                                           int featureValues, Feature... features) {
@@ -380,73 +356,13 @@ public abstract class JSON implements JSONStreamAware, JSONAware {
         }
 
         T value = (T) parser.parseObject(clazz, null);
-
         parser.handleResovleTask(value);
-
         parser.close();
-
         return (T) value;
     }
 
-    @SuppressWarnings("unchecked")
-    public static <T> T parseObject(byte[] bytes, Type clazz, Feature... features) {
-        return (T) parseObject(bytes, 0, bytes.length, IOUtils.UTF8, clazz, features);
-    }
-    
-    /**
-     * @since 1.2.11
-     */
-    @SuppressWarnings("unchecked")
-    public static <T> T parseObject(byte[] bytes, int offset, int len, Charset charset, Type clazz, Feature... features) {
-        return (T) parseObject(bytes, offset, len, charset, clazz, ParserConfig.global, null, DEFAULT_PARSER_FEATURE, features);
-    }
 
-    /**
-     * @since 1.2.55
-     */
-    @SuppressWarnings("unchecked")
-    public static <T> T parseObject(byte[] bytes,
-                                    Charset charset,
-                                    Type clazz,
-                                    ParserConfig config,
-                                    ParseProcess processor,
-                                    int featureValues,
-                                    Feature... features) {
-        return (T) parseObject(bytes, 0, bytes.length, charset, clazz, config, processor, featureValues, features);
-    }
-
-    /**
-     * @since 1.2.55
-     */
-    @SuppressWarnings("unchecked")
-    public static <T> T parseObject(byte[] bytes, int offset, int len,
-                                    Charset charset,
-                                    Type clazz,
-                                    ParserConfig config,
-                                    ParseProcess processor,
-                                    int featureValues,
-                                    Feature... features) {
-        if (charset == null) {
-            charset = IOUtils.UTF8;
-        }
-
-        String strVal;
-        if (charset == IOUtils.UTF8) {
-            char[] chars = allocateChars(bytes.length);
-            int chars_len = IOUtils.decodeUTF8(bytes, offset, len, chars);
-            if (chars_len < 0) {
-                return null;
-            }
-            strVal = new String(chars, 0, chars_len);
-        } else {
-            if (len < 0) {
-                return null;
-            }
-            strVal = new String(bytes, offset, len, charset);
-        }
-        return (T) parseObject(strVal, clazz, config, processor, featureValues, features);
-    }
-
+//下面两个方法是一组的
     @SuppressWarnings("unchecked")
     public static <T> T parseObject(byte[] input, //
                                     int off, //
@@ -481,84 +397,13 @@ public abstract class JSON implements JSONStreamAware, JSONAware {
 
         DefaultJSONParser parser = new DefaultJSONParser(input, length, ParserConfig.getGlobalInstance(), featureValues);
         T value = (T) parser.parseObject(clazz);
-
         parser.handleResovleTask(value);
-
         parser.close();
-
         return (T) value;
     }
+/**********parse object结束***********************/
     
-    /**
-     * @since 1.2.11
-     */
-    @SuppressWarnings("unchecked")
-    public static <T> T parseObject(InputStream is, //
-                                    Type type, //
-                                    Feature... features) throws IOException {
-        return (T) parseObject(is, IOUtils.UTF8, type, features);
-    }
-    
-    /**
-     * @since 1.2.11
-     */
-    @SuppressWarnings("unchecked")
-    public static <T> T parseObject(InputStream is, //
-                                    Charset charset, //
-                                    Type type, //
-                                    Feature... features) throws IOException {
-        return (T) parseObject(is, charset, type, ParserConfig.global, features);
-    }
-
-    /**
-     * @since 1.2.55
-     */
-    @SuppressWarnings("unchecked")
-    public static <T> T parseObject(InputStream is, //
-                                    Charset charset, //
-                                    Type type, //
-                                    ParserConfig config, //
-                                    Feature... features) throws IOException {
-        return (T) parseObject(is, charset, type, config, null, DEFAULT_PARSER_FEATURE, features);
-    }
-
-    /**
-     * @since 1.2.55
-     */
-    @SuppressWarnings("unchecked")
-    public static <T> T parseObject(InputStream is, //
-                                    Charset charset, //
-                                    Type type, //
-                                    ParserConfig config, //
-                                    ParseProcess processor, //
-                                    int featureValues, //
-                                    Feature... features) throws IOException {
-        if (charset == null) {
-            charset = IOUtils.UTF8;
-        }
-
-        byte[] bytes = allocateBytes(1024 * 64);
-        int offset = 0;
-        for (;;) {
-            int readCount = is.read(bytes, offset, bytes.length - offset);
-            if (readCount == -1) {
-                break;
-            }
-            offset += readCount;
-            if (offset == bytes.length) {
-                byte[] newBytes = new byte[bytes.length * 3 / 2];
-                System.arraycopy(bytes, 0, newBytes, 0, bytes.length);
-                bytes = newBytes;
-            }
-        }
-
-        return (T) parseObject(bytes, 0, offset, charset, type, config, processor, featureValues, features);
-    }
-
-    public static <T> T parseObject(String text, Class<T> clazz) {
-        return parseObject(text, clazz, new Feature[0]);
-    }
-
+/**********parse array***********************/
     public static JSONArray parseArray(String text) {
         if (text == null) {
             return null;
@@ -635,22 +480,36 @@ public abstract class JSON implements JSONStreamAware, JSONAware {
         return list;
     }
 
-    /**
-     * This method serializes the specified object into its equivalent Json representation. Note that this method works fine if the any of the object fields are of generic type,
-     * just the object itself should not be of a generic type. If you want to write out the object to a
-     * {@link Writer}, use {@link #writeJSONString(Writer, Object, SerializerFeature[])} instead.
-     *
-     * @param object the object for which json representation is to be created setting for fastjson
-     * @return Json representation of {@code object}.
-     */
-    public static String toJSONString(Object object) {
-        return toJSONString(object, emptyFilters);
+/**********parse array结束**********************/    
+/**********to json string**********************/  
+    @Override
+    public String toString() {
+        return toJSONString();
     }
 
+    //转成json字符串，就是序列化输出
+    public String toJSONString() {
+        SerializeWriter out = new SerializeWriter();
+        try {
+            new JSONSerializer(out).write(this);
+            return out.toString();
+        } finally {
+            out.close();
+        }
+    }
+  /*
+   * toJsonString 都是调用JSONSerializer 输出序列化
+   * 三个方法是一组的  
+   */
+    public static String toJSONString(Object object, boolean prettyFormat) {
+        if (!prettyFormat) {
+            return toJSONString(object);
+        }
+        return toJSONString(object, SerializerFeature.PrettyFormat);
+    }
     public static String toJSONString(Object object, SerializerFeature... features) {
         return toJSONString(object, DEFAULT_GENERATE_FEATURE, features);
     }
-    
     /**
      * @since 1.2.11
      */
@@ -667,55 +526,7 @@ public abstract class JSON implements JSONStreamAware, JSONAware {
     }
 
     /**
-     * @since 1.1.14
-     */
-    public static String toJSONStringWithDateFormat(Object object, String dateFormat,
-                                                          SerializerFeature... features) {
-        return toJSONString(object, SerializeConfig.globalInstance, null, dateFormat, DEFAULT_GENERATE_FEATURE, features);
-    }
-
-    public static String toJSONString(Object object, SerializeFilter filter, SerializerFeature... features) {
-        return toJSONString(object, SerializeConfig.globalInstance, new SerializeFilter[] {filter}, null, DEFAULT_GENERATE_FEATURE, features);
-    }
-
-    public static String toJSONString(Object object, SerializeFilter[] filters, SerializerFeature... features) {
-        return toJSONString(object, SerializeConfig.globalInstance, filters, null, DEFAULT_GENERATE_FEATURE, features);
-    }
-
-    public static byte[] toJSONBytes(Object object, SerializerFeature... features) {
-        return toJSONBytes(object, DEFAULT_GENERATE_FEATURE, features);
-    }
-
-    public static byte[] toJSONBytes(Object object, SerializeFilter filter, SerializerFeature... features) {
-        return toJSONBytes(object, SerializeConfig.globalInstance, new SerializeFilter[] {filter}, DEFAULT_GENERATE_FEATURE, features);
-    }
-    
-    /**
-     * @since 1.2.11 
-     */
-    public static byte[] toJSONBytes(Object object, int defaultFeatures, SerializerFeature... features) {
-        return toJSONBytes(object, SerializeConfig.globalInstance, defaultFeatures, features);
-    }
-
-    public static String toJSONString(Object object, SerializeConfig config, SerializerFeature... features) {
-        return toJSONString(object, config, (SerializeFilter) null, features);
-    }
-
-    public static String toJSONString(Object object, //
-                                      SerializeConfig config, //
-                                      SerializeFilter filter, //
-                                      SerializerFeature... features) {
-        return toJSONString(object, config, new SerializeFilter[] {filter}, null, DEFAULT_GENERATE_FEATURE, features);
-    }
-
-    public static String toJSONString(Object object, //
-                                      SerializeConfig config, //
-                                      SerializeFilter[] filters, //
-                                      SerializerFeature... features) {
-        return toJSONString(object, config, filters, null, DEFAULT_GENERATE_FEATURE, features);
-    }
-    
-    /**
+     * 其他所有的tojsonstring都是调用这个方法
      * @since 1.2.9
      * @return
      */
@@ -748,39 +559,10 @@ public abstract class JSON implements JSONStreamAware, JSONAware {
             out.close();
         }
     }
-
-    /**
-     * @deprecated
-     */
-    public static String toJSONStringZ(Object object, SerializeConfig mapping, SerializerFeature... features) {
-        return toJSONString(object, mapping, emptyFilters, null, 0, features);
-    }
-
-    /**
-     * @since 1.2.42
-     */
-    public static byte[] toJSONBytes(Object object, SerializeConfig config, SerializerFeature... features) {
-        return toJSONBytes(object, config, emptyFilters, DEFAULT_GENERATE_FEATURE, features);
-    }
-
-    /**
-     * @since 1.2.11
-     */
-    public static byte[] toJSONBytes(Object object, SerializeConfig config, int defaultFeatures, SerializerFeature... features) {
-        return toJSONBytes(object, config, emptyFilters, defaultFeatures, features);
-    }
-
-    /**
-     * @since 1.2.42
-     */
-    public static byte[] toJSONBytes(Object object, SerializeFilter[] filters, SerializerFeature... features) {
-        return toJSONBytes(object, SerializeConfig.globalInstance, filters, DEFAULT_GENERATE_FEATURE, features);
-    }
-
-    public static byte[] toJSONBytes(Object object, SerializeConfig config, SerializeFilter filter, SerializerFeature... features) {
-        return toJSONBytes(object, config, new SerializeFilter[] {filter}, DEFAULT_GENERATE_FEATURE, features);
-    }
     
+
+/**********toJSONBytes**********************/ 
+
     /**
      * @since 1.2.42
      */
@@ -796,6 +578,7 @@ public abstract class JSON implements JSONStreamAware, JSONAware {
     }
 
     /**
+     * 主方法
      * @since 1.2.55
      */
     public static byte[] toJSONBytes(Charset charset, //
@@ -828,34 +611,14 @@ public abstract class JSON implements JSONStreamAware, JSONAware {
         }
     }
 
-    public static String toJSONString(Object object, boolean prettyFormat) {
-        if (!prettyFormat) {
-            return toJSONString(object);
-        }
-
-        return toJSONString(object, SerializerFeature.PrettyFormat);
-    }
     
+   
+ /***********writeJSONString**都是序列化输出****************/   
     /**
-     * @deprecated use writeJSONString
-     */
-    public static void writeJSONStringTo(Object object, Writer writer, SerializerFeature... features) {
-        writeJSONString(writer, object, features);
-    }
-
-    /**
+     * 序列化输出 
      * This method serializes the specified object into its equivalent json representation.
-     *
-     * @param writer Writer to which the json representation needs to be written
-     * @param object the object for which json representation is to be created setting for fastjson
-     * @param features serializer features
-     * @since 1.2.11
-     */
-    public static void writeJSONString(Writer writer, Object object, SerializerFeature... features) {
-        writeJSONString(writer, object, JSON.DEFAULT_GENERATE_FEATURE, features);
-    }
-    
-    /**
+     * SerializerFeature serializer features
+     * defaultFeatures
      * @since 1.2.11 
      */
     public static void writeJSONString(Writer writer, Object object, int defaultFeatures, SerializerFeature... features) {
@@ -869,50 +632,6 @@ public abstract class JSON implements JSONStreamAware, JSONAware {
         }
     }
     
-    /**
-     * write object as json to OutputStream
-     * @param os output stream
-     * @param object
-     * @param features serializer features
-     * @since 1.2.11
-     * @throws IOException
-     */
-    public static final int writeJSONString(OutputStream os, // 
-                                             Object object, // 
-                                             SerializerFeature... features) throws IOException {
-        return writeJSONString(os, object, DEFAULT_GENERATE_FEATURE, features);
-    }
-    
-    /**
-     * @since 1.2.11 
-     */
-    public static final int writeJSONString(OutputStream os, // 
-                                            Object object, // 
-                                            int defaultFeatures, //
-                                            SerializerFeature... features) throws IOException {
-       return writeJSONString(os,  //
-                              IOUtils.UTF8, //
-                              object, //
-                              SerializeConfig.globalInstance, //
-                              null, //
-                              null, // 
-                              defaultFeatures, //
-                              features);
-   }
-    
-    public static final int writeJSONString(OutputStream os, // 
-                                             Charset charset, // 
-                                             Object object, // 
-                                             SerializerFeature... features) throws IOException {
-        return writeJSONString(os, //
-                               charset, //
-                               object, //
-                               SerializeConfig.globalInstance, //
-                               null, //
-                               null, //
-                               DEFAULT_GENERATE_FEATURE, //
-                               features);
-    }
     
     public static final int writeJSONString(OutputStream os, // 
                                              Charset charset, // 
@@ -946,22 +665,18 @@ public abstract class JSON implements JSONStreamAware, JSONAware {
             writer.close();
         }
     }
-
-    // ======================================
-    @Override
-    public String toString() {
-        return toJSONString();
-    }
-
-    public String toJSONString() {
+    public void writeJSONString(Appendable appendable) {
         SerializeWriter out = new SerializeWriter();
         try {
             new JSONSerializer(out).write(this);
-            return out.toString();
+            appendable.append(out.toString());
+        } catch (IOException e) {
+            throw new JSONException(e.getMessage(), e);
         } finally {
             out.close();
         }
     }
+    
 
     /**
      * @since 1.2.57
@@ -977,34 +692,17 @@ public abstract class JSON implements JSONStreamAware, JSONAware {
         }
     }
 
-    public void writeJSONString(Appendable appendable) {
-        SerializeWriter out = new SerializeWriter();
-        try {
-            new JSONSerializer(out).write(this);
-            appendable.append(out.toString());
-        } catch (IOException e) {
-            throw new JSONException(e.getMessage(), e);
-        } finally {
-            out.close();
-        }
-    }
+
 
     /**
      * This method serializes the specified object into its equivalent representation as a tree of
      * {@link JSONObject}s. 
-     *
+     * 重载略过
      */
     public static Object toJSON(Object javaObject) {
         return toJSON(javaObject, SerializeConfig.globalInstance);
     }
-
-    /**
-     * @deprecated
-     */
-    public static Object toJSON(Object javaObject, ParserConfig parserConfig) {
-        return toJSON(javaObject, SerializeConfig.globalInstance);
-    }
-    
+    //这个是主方法
     @SuppressWarnings("unchecked")
     public static Object toJSON(Object javaObject, SerializeConfig config) {
         if (javaObject == null) {
@@ -1282,6 +980,325 @@ public abstract class JSON implements JSONStreamAware, JSONAware {
         }
         return null;
     }
+/******************get/set******************************/
+/******************重载方法********************************/    
+    //重载略过
+    public static Object parse(String text) {
+        return parse(text, DEFAULT_PARSER_FEATURE);
+    }
 
+    /**
+     * 重载略过
+     * @since 1.2.38
+     */
+    public static Object parse(String text, ParserConfig config) {
+        return parse(text, config, DEFAULT_PARSER_FEATURE);
+    }
+    
+    
+    /**
+     * <pre>
+     * String jsonStr = "[{\"id\":1001,\"name\":\"Jobs\"}]";
+     * List&lt;Model&gt; models = JSON.parseObject(jsonStr, new TypeReference&lt;List&lt;Model&gt;&gt;() {});
+     * </pre>
+     * @param text json string
+     * @param type type refernce
+     * @param features
+     * @return
+     */
+    @SuppressWarnings("unchecked")
+    public static <T> T parseObject(String text, TypeReference<T> type, Feature... features) {
+        return (T) parseObject(text, type.type, ParserConfig.global, DEFAULT_PARSER_FEATURE, features);
+    }
+
+    public static <T> T parseObject(String text, Class<T> clazz) {
+        return parseObject(text, clazz, new Feature[0]);
+    }
+    /**
+     * This method deserializes the specified Json into an object of the specified type. This method
+     * is useful if the specified object is a generic type. For non-generic objects, use
+     * {@link #parseObject(String, Class, Feature[])} instead. If you have the Json in a {@link InputStream} instead of
+     * a String, use {@link #parseObject(InputStream, Type, Feature[])} instead.
+     *
+     * @param <T> the type of the desired object
+     * @param json the string from which the object is to be deserialized
+     * @param type The specific genericized type of src. You can obtain this type by using the
+     * {@link com.alibaba.fastjson.TypeReference} class. For example, to get the type for
+     * {@code Collection<Foo>}, you should use:
+     * <pre>
+     * Type type = new TypeReference&lt;Collection&lt;Foo&gt;&gt;(){}.getType();
+     * </pre>
+     * @return an object of type T from the string
+     */
+    @SuppressWarnings("unchecked")
+    public static <T> T parseObject(String json, Type type, Feature... features) {
+    	return (T) parseObject(json, type, ParserConfig.global, DEFAULT_PARSER_FEATURE, features);
+    }
+    public static <T> T parseObject(String input, Type clazz, ParserConfig config, int featureValues,
+            Feature... features) {
+    	return parseObject(input, clazz, config, null, featureValues, features);
+	}
+    
+    /**
+     * 
+     * This method deserializes the specified Json into an object of the specified class. It is not
+     * suitable to use if the specified class is a generic type since it will not have the generic
+     * type information because of the Type Erasure feature of Java. Therefore, this method should not
+     * be used if the desired type is a generic type. Note that this method works fine if the any of
+     * the fields of the specified object are generics, just the object itself should not be a
+     * generic type. For the cases when the object is of generic type, invoke
+     * {@link #parseObject(String, Type, Feature[])}. If you have the Json in a {@link InputStream} instead of
+     * a String, use {@link #parseObject(InputStream, Type, Feature[])} instead.
+     *
+     * @param json the string from which the object is to be deserialized
+     * @param clazz the class of T
+     * @param features parser features
+     * @return an object of type T from the string
+     * classOfT
+     */
+    @SuppressWarnings("unchecked")
+    public static <T> T parseObject(String json, Class<T> clazz, Feature... features) {
+        return (T) parseObject(json, (Type) clazz, ParserConfig.global, null, DEFAULT_PARSER_FEATURE, features);
+    }
+    @SuppressWarnings("unchecked")
+    public static <T> T parseObject(String text, Class<T> clazz, ParseProcess processor, Feature... features) {
+        return (T) parseObject(text, (Type) clazz, ParserConfig.global, processor, DEFAULT_PARSER_FEATURE,
+                               features);
+    }
+    /**
+     * @since 1.2.11
+     */
+    public static <T> T parseObject(String input, Type clazz, ParserConfig config, Feature... features) {
+        return parseObject(input, clazz, config, null, DEFAULT_PARSER_FEATURE, features);
+    }
+    
+    
+    
+    @SuppressWarnings("unchecked")
+    public static <T> T parseObject(byte[] bytes, Type clazz, Feature... features) {
+        return (T) parseObject(bytes, 0, bytes.length, IOUtils.UTF8, clazz, features);
+    }
+    /**
+     * @since 1.2.11
+     */
+    @SuppressWarnings("unchecked")
+    public static <T> T parseObject(byte[] bytes, int offset, int len, Charset charset, Type clazz, Feature... features) {
+        return (T) parseObject(bytes, offset, len, charset, clazz, ParserConfig.global, null, DEFAULT_PARSER_FEATURE, features);
+    }
+
+    /**
+     * @since 1.2.55
+     */
+    @SuppressWarnings("unchecked")
+    public static <T> T parseObject(byte[] bytes,
+                                    Charset charset,
+                                    Type clazz,
+                                    ParserConfig config,
+                                    ParseProcess processor,
+                                    int featureValues,
+                                    Feature... features) {
+        return (T) parseObject(bytes, 0, bytes.length, charset, clazz, config, processor, featureValues, features);
+    }
+    
+    /**
+     * @since 1.2.11
+     */
+    @SuppressWarnings("unchecked")
+    public static <T> T parseObject(InputStream is, //
+                                    Type type, //
+                                    Feature... features) throws IOException {
+        return (T) parseObject(is, IOUtils.UTF8, type, features);
+    }
+    /**
+     * @since 1.2.11
+     */
+    @SuppressWarnings("unchecked")
+    public static <T> T parseObject(InputStream is, //
+                                    Charset charset, //
+                                    Type type, //
+                                    Feature... features) throws IOException {
+        return (T) parseObject(is, charset, type, ParserConfig.global, features);
+    }
+
+    /**
+     * @since 1.2.55
+     */
+    @SuppressWarnings("unchecked")
+    public static <T> T parseObject(InputStream is, //
+                                    Charset charset, //
+                                    Type type, //
+                                    ParserConfig config, //
+                                    Feature... features) throws IOException {
+        return (T) parseObject(is, charset, type, config, null, DEFAULT_PARSER_FEATURE, features);
+    }
+    @SuppressWarnings("unchecked")
+    public static <T> T parseObject(String input, Type clazz, ParseProcess processor, Feature... features) {
+        return (T) parseObject(input, clazz, ParserConfig.global, processor, DEFAULT_PARSER_FEATURE, features);
+    }
+    
+    
+    /**
+     * This method serializes the specified object into its equivalent Json representation. Note that this method works fine if the any of the object fields are of generic type,
+     * just the object itself should not be of a generic type. If you want to write out the object to a
+     * {@link Writer}, use {@link #writeJSONString(Writer, Object, SerializerFeature[])} instead.
+     *
+     * @param object the object for which json representation is to be created setting for fastjson
+     * @return Json representation of {@code object}.
+     */
+    public static String toJSONString(Object object) {
+        return toJSONString(object, emptyFilters);
+    }
+    /**
+     * @since 1.1.14
+     */
+    public static String toJSONStringWithDateFormat(Object object, String dateFormat,
+                                                          SerializerFeature... features) {
+        return toJSONString(object, SerializeConfig.globalInstance, null, dateFormat, DEFAULT_GENERATE_FEATURE, features);
+    }
+
+    public static String toJSONString(Object object, SerializeFilter filter, SerializerFeature... features) {
+        return toJSONString(object, SerializeConfig.globalInstance, new SerializeFilter[] {filter}, null, DEFAULT_GENERATE_FEATURE, features);
+    }
+    public static String toJSONString(Object object, SerializeFilter[] filters, SerializerFeature... features) {
+        return toJSONString(object, SerializeConfig.globalInstance, filters, null, DEFAULT_GENERATE_FEATURE, features);
+    }
+    public static String toJSONString(Object object, SerializeConfig config, SerializerFeature... features) {
+        return toJSONString(object, config, (SerializeFilter) null, features);
+    }
+    public static String toJSONString(Object object, //
+            SerializeConfig config, //
+            SerializeFilter filter, //
+            SerializerFeature... features) {
+    	return toJSONString(object, config, new SerializeFilter[] {filter}, null, DEFAULT_GENERATE_FEATURE, features);
+    }
+
+    public static String toJSONString(Object object, //
+            SerializeConfig config, //
+            SerializeFilter[] filters, //
+            SerializerFeature... features) {
+    	return toJSONString(object, config, filters, null, DEFAULT_GENERATE_FEATURE, features);
+    }
+    
+    
+    /**
+     * @deprecated
+     */
+    public static String toJSONStringZ(Object object, SerializeConfig mapping, SerializerFeature... features) {
+        return toJSONString(object, mapping, emptyFilters, null, 0, features);
+    }
+    
+    
+ /*******toJSONBytes重载***********/   
+    public static byte[] toJSONBytes(Object object, SerializerFeature... features) {
+        return toJSONBytes(object, DEFAULT_GENERATE_FEATURE, features);
+    }
+
+    /**
+     * @since 1.2.11 
+     */
+    public static byte[] toJSONBytes(Object object, int defaultFeatures, SerializerFeature... features) {
+    	return toJSONBytes(object, SerializeConfig.globalInstance, defaultFeatures, features);
+    }
+    /**
+     * @since 1.2.11
+     */
+    public static byte[] toJSONBytes(Object object, SerializeConfig config, int defaultFeatures, SerializerFeature... features) {
+        return toJSONBytes(object, config, emptyFilters, defaultFeatures, features);
+    }
+    /**
+     * @since 1.2.42
+     */
+    public static byte[] toJSONBytes(Object object, SerializeConfig config, SerializerFeature... features) {
+    	return toJSONBytes(object, config, emptyFilters, DEFAULT_GENERATE_FEATURE, features);
+    }
+    /**
+     * @since 1.2.42
+     */
+    public static byte[] toJSONBytes(Object object, SerializeFilter[] filters, SerializerFeature... features) {
+        return toJSONBytes(object, SerializeConfig.globalInstance, filters, DEFAULT_GENERATE_FEATURE, features);
+    }
+
+    public static byte[] toJSONBytes(Object object, SerializeConfig config, SerializeFilter filter, SerializerFeature... features) {
+        return toJSONBytes(object, config, new SerializeFilter[] {filter}, DEFAULT_GENERATE_FEATURE, features);
+    }
+    public static byte[] toJSONBytes(Object object, SerializeFilter filter, SerializerFeature... features) {
+        return toJSONBytes(object, SerializeConfig.globalInstance, new SerializeFilter[] {filter}, DEFAULT_GENERATE_FEATURE, features);
+    }
+    
+    /**废弃
+     * @deprecated use writeJSONString
+     */
+    public static void writeJSONStringTo(Object object, Writer writer, SerializerFeature... features) {
+        writeJSONString(writer, object, features);
+    }
+
+    /**
+     * 重载略过
+     * This method serializes the specified object into its equivalent json representation.
+     *
+     * @param writer Writer to which the json representation needs to be written
+     * @param object the object for which json representation is to be created setting for fastjson
+     * @param features serializer features
+     * @since 1.2.11
+     */
+    public static void writeJSONString(Writer writer, Object object, SerializerFeature... features) {
+        writeJSONString(writer, object, JSON.DEFAULT_GENERATE_FEATURE, features);
+    }
+    
+    
+    
+    /**
+     * @deprecated废弃
+     */
+    public static Object toJSON(Object javaObject, ParserConfig parserConfig) {
+        return toJSON(javaObject, SerializeConfig.globalInstance);
+    }
+    /**
+     * write object as json to OutputStream
+     * @param os output stream
+     * @param object
+     * @param features serializer features
+     * @since 1.2.11
+     * @throws IOException
+     */
+    public static final int writeJSONString(OutputStream os, // 
+                                             Object object, // 
+                                             SerializerFeature... features) throws IOException {
+        return writeJSONString(os, object, DEFAULT_GENERATE_FEATURE, features);
+    }
+    
+    /**
+     * @since 1.2.11 
+     */
+    public static final int writeJSONString(OutputStream os, // 
+                                            Object object, // 
+                                            int defaultFeatures, //
+                                            SerializerFeature... features) throws IOException {
+       return writeJSONString(os,  //
+                              IOUtils.UTF8, //
+                              object, //
+                              SerializeConfig.globalInstance, //
+                              null, //
+                              null, // 
+                              defaultFeatures, //
+                              features);
+   }
+    
+    public static final int writeJSONString(OutputStream os, // 
+                                             Charset charset, // 
+                                             Object object, // 
+                                             SerializerFeature... features) throws IOException {
+        return writeJSONString(os, //
+                               charset, //
+                               object, //
+                               SerializeConfig.globalInstance, //
+                               null, //
+                               null, //
+                               DEFAULT_GENERATE_FEATURE, //
+                               features);
+    }
+    
+    
     public final static String VERSION = "1.2.60";
+    
 }
