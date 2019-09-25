@@ -17,7 +17,8 @@ package com.alibaba.fastjson.parser;
 
 /**
  * @author wenshao[szujobs@hotmail.com]
- * 枚举常量类 json字符的种类，给不同的种类字符 设置 一个编号
+ * 枚举常量类 json字符的种类，给不同类别的字符 设置 一个编号
+ * String name(int value)根据编号返回类别名字
  */
 public class JSONToken {
 

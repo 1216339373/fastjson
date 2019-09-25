@@ -143,12 +143,11 @@ public enum Feature {
     ErrorOnEnumNotMatch
     ;
 
+	public final int mask;
 	//构造方法
     Feature(){
         mask = (1 << ordinal());
     }
-
-    public final int mask;
 
     public final int getMask() {
         return mask;

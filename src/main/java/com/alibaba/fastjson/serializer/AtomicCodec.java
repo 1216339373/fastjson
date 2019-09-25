@@ -38,6 +38,7 @@ public class AtomicCodec implements ObjectSerializer, ObjectDeserializer {
     public void write(JSONSerializer serializer, Object object, Object fieldName, Type fieldType, int features) throws IOException {
         SerializeWriter out = serializer.out;
         
+        //判断是 integer 还是 long 还是 boolean
         if (object instanceof AtomicInteger) {
             AtomicInteger val = (AtomicInteger) object;
             out.writeInt(val.get());
@@ -61,6 +62,7 @@ public class AtomicCodec implements ObjectSerializer, ObjectDeserializer {
             return;
         }
 
+        //是int数组，用方括号[]输出
         if (object instanceof AtomicIntegerArray) {
             AtomicIntegerArray array = (AtomicIntegerArray) object;
             int len = array.length();
@@ -76,7 +78,7 @@ public class AtomicCodec implements ObjectSerializer, ObjectDeserializer {
             
             return;
         }
-        
+        //是long数组，就把int 换成long 输出
         AtomicLongArray array = (AtomicLongArray) object;
         int len = array.length();
         out.write('[');
@@ -90,8 +92,13 @@ public class AtomicCodec implements ObjectSerializer, ObjectDeserializer {
         out.write(']');
     }
 
+    /**
+     * 反序列化
+     * 入参 解析器  类别  字段名
+     */
     @SuppressWarnings("unchecked")
     public <T> T deserialze(DefaultJSONParser parser, Type clazz, Object fieldName) {
+    	//如果类别为空  找下一个逗号，返回
         if (parser.lexer.token() == JSONToken.NULL) {
             parser.lexer.nextToken(JSONToken.COMMA);
             return null;
@@ -100,6 +107,8 @@ public class AtomicCodec implements ObjectSerializer, ObjectDeserializer {
         JSONArray array = new JSONArray();
         parser.parseArray(array);
 
+        
+        //区别type类型是Integer 还是 Long
         if (clazz == AtomicIntegerArray.class) {
             AtomicIntegerArray atomicArray = new AtomicIntegerArray(array.size());
             for (int i = 0; i < array.size(); ++i) {
@@ -117,6 +126,7 @@ public class AtomicCodec implements ObjectSerializer, ObjectDeserializer {
         return (T) atomicArray;
     }
 
+    //获取左方括号的字符类别代码
     public int getFastMatchToken() {
         return JSONToken.LBRACKET;
     }

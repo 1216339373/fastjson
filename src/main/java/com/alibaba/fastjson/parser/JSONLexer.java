@@ -32,29 +32,25 @@ public interface JSONLexer {
     int  END            = 4;//
     int  VALUE_NULL     = 5;//空值
 
+    //获取token代码
     int token();
 
+    //返回tokenname
     String tokenName();
 
     void skipWhitespace();
 
-    //next token type 获取下一个json字符是什么类型
+    //跳到下一个token类型
     void nextToken();
 
-    //
+    //跳到下一个指定的token类型
     void nextToken(int expect);
 
     char getCurrent();
 
     char next();
 
-    String scanSymbol(final SymbolTable symbolTable);
-
-    String scanSymbol(final SymbolTable symbolTable, final char quote);
-
     void resetStringPosition();
-
-    void scanNumber();
 
     int pos();//当前扫描位置
 
@@ -64,8 +60,6 @@ public interface JSONLexer {
 
     Number decimalValue(boolean decimal);
 
-    String scanSymbolUnQuoted(final SymbolTable symbolTable);
-
     String stringVal();
 
     boolean isEnabled(int feature);
@@ -74,7 +68,6 @@ public interface JSONLexer {
 
     void config(Feature feature, boolean state);
 
-    void scanString();
 
     int intValue();
 
@@ -96,30 +89,36 @@ public interface JSONLexer {
 
     float floatValue();
 
+    //扫描常用的类型
+    String scanSymbol(final SymbolTable symbolTable);
+    String scanSymbol(final SymbolTable symbolTable, final char quote);
+    String scanSymbolUnQuoted(final SymbolTable symbolTable);
+    void scanNumber();//扫描数字
+    void scanString();
     int scanInt(char expectNext);
     long scanLong(char expectNextChar);
     float scanFloat(char seperator);
     double scanDouble(char seperator);
     boolean scanBoolean(char expectNext);
     BigDecimal scanDecimal(char seperator);
-
     String scanString(char expectNextChar);
-
+    //扫描枚举
     Enum<?> scanEnum(Class<?> enumClass, final SymbolTable symbolTable, char serperator);
-
+    //扫描带分隔符的符号
     String scanSymbolWithSeperator(final SymbolTable symbolTable, char serperator);
-
+    //扫描字符串数组
     void scanStringArray(Collection<String> collection, char seperator);
-
-    TimeZone getTimeZone();
-
-    void setTimeZone(TimeZone timeZone);
-
-    Locale getLocale();
-
-    void setLocale(Locale locale);
 
     String info();
 
+/*********get set*********************/    
     int getFeatures();
+
+    TimeZone getTimeZone();
+    
+    void setTimeZone(TimeZone timeZone);
+
+    Locale getLocale();
+    
+    void setLocale(Locale locale);
 }

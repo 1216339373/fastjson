@@ -10,7 +10,7 @@ import com.alibaba.fastjson.parser.JSONLexer;
 import com.alibaba.fastjson.parser.JSONToken;
 import com.alibaba.fastjson.parser.deserializer.ObjectDeserializer;
 
-
+//主要作用就是toCharArray转成字符数组char[]
 public class CharArrayCodec implements ObjectDeserializer {
 
     @SuppressWarnings("unchecked")
@@ -35,17 +35,21 @@ public class CharArrayCodec implements ObjectDeserializer {
 
         Object value = parser.parse();
 
+        //把string转成 单个字符数组
         if (value instanceof  String) {
             return (T) ((String) value).toCharArray();
         }
 
         if (value instanceof Collection) {
-            Collection<?> collection = (Collection) value;
+            @SuppressWarnings("rawtypes")
+			Collection<?> collection = (Collection) value;
 
+            //设置标志量，是否可以转为char[]
             boolean accept = true;
             for (Object item : collection) {
                 if (item instanceof String) {
                     int itemLength = ((String) item).length();
+                    //转成字符数组，单个字符长度必须是1
                     if (itemLength != 1) {
                         accept = false;
                         break;
@@ -57,8 +61,10 @@ public class CharArrayCodec implements ObjectDeserializer {
                 throw new JSONException("can not cast to char[]");
             }
 
+            //根据集合大小创建char[]
             char[] chars = new char[collection.size()];
             int pos = 0;
+            //迭代赋值给char[]
             for (Object item : collection) {
                 chars[pos++] = ((String) item).charAt(0);
             }
@@ -70,6 +76,7 @@ public class CharArrayCodec implements ObjectDeserializer {
             : (T) JSON.toJSONString(value).toCharArray();
     }
 
+    //返回String的类别代码
     public int getFastMatchToken() {
         return JSONToken.LITERAL_STRING;
     }

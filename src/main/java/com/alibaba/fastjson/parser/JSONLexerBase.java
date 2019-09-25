@@ -22,6 +22,7 @@ import java.util.*;
 
 import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.JSONException;
+import com.alibaba.fastjson.annotation.Read;
 import com.alibaba.fastjson.util.IOUtils;
 
 import static com.alibaba.fastjson.parser.JSONToken.*;
@@ -34,17 +35,34 @@ import static com.alibaba.fastjson.parser.JSONToken.*;
  */
 public abstract class JSONLexerBase implements JSONLexer, Closeable {
 
-	public int matchStat  = UNKNOWN;
-    //token存放当前读取的字符的类型
+	public int matchStat  = UNKNOWN;//0未知
+    //token存放当前读取的字符的类型代号
     protected int token;
     /** 记录当前扫描字符位置 */
     protected int pos;
     protected int features;
     /** 当前有效字符 */
     protected char  ch;
+    /** 流(或者json字符串)中当前的位置，每次读取字符会递增 */
     protected int   bp;
 
     protected int   eofPos;
+
+    //是否包含特殊字符
+    protected boolean  hasSpecial;
+    protected Calendar calendar  = null;
+    protected TimeZone timeZone  = JSON.defaultTimeZone;//获取默认时区
+    protected Locale   locale  = JSON.defaultLocale;//获取当地语言
+
+    protected String  stringDefaultValue = null;
+    
+    protected static final long  MULTMIN_RADIX_TEN     = Long.MIN_VALUE / 10;
+    protected static final int   INT_MULTMIN_RADIX_TEN = Integer.MIN_VALUE / 10;
+    
+    //digits作用是什么
+    protected final static int[] digits                = new int[(int) 'f' + 1];// (int)'f'=102
+    							//字段名称				"@type":"[]
+    protected final static char[] typeFieldName = ("\"" + JSON.DEFAULT_TYPE_KEY + "\":\"").toCharArray();
 
     /**字符缓冲区 构造函数初始化大小512
      * A character buffer for literals.
@@ -54,35 +72,26 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
      *  字符的位置，也代表字符缓冲区字符数量
      */
     protected int  sp;
-
     /**
      * number start position
+     * 可以理解为 找到token时 token的首字符位置
+     * 和bp不一样，这个不会递增，会在开始token前记录一次
      */
-    protected int   np;
-    //是否包含特殊字符
-    protected boolean  hasSpecial;
-    protected Calendar calendar  = null;
-    protected TimeZone timeZone  = JSON.defaultTimeZone;
-    protected Locale   locale  = JSON.defaultLocale;
-
-    protected String  stringDefaultValue = null;
-    
-    protected static final long  MULTMIN_RADIX_TEN     = Long.MIN_VALUE / 10;
-    protected static final int   INT_MULTMIN_RADIX_TEN = Integer.MIN_VALUE / 10;
-    protected final static int[] digits                = new int[(int) 'f' + 1];
-    protected final static char[] typeFieldName = ("\"" + JSON.DEFAULT_TYPE_KEY + "\":\"").toCharArray();
-
+    protected int  np;
+    //赋值给缓冲区的数组
     private final static ThreadLocal<char[]> SBUF_LOCAL         = new ThreadLocal<char[]>();
 
-
+    //这一段作用是什么
     static {
+    	//如果是0~9 
         for (int i = '0'; i <= '9'; ++i) {
             digits[i] = i - '0';
         }
-
+        //如果是a~f   0~5  +10
         for (int i = 'a'; i <= 'f'; ++i) {
             digits[i] = (i - 'a') + 10;
         }
+        //如果是A~F   0~5  +10
         for (int i = 'A'; i <= 'F'; ++i) {
             digits[i] = (i - 'A') + 10;
         }
@@ -91,10 +100,11 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
     public JSONLexerBase(int features){
         this.features = features;
 
+        //初始化字符串字段
         if ((features & Feature.InitStringFieldAsEmpty.mask) != 0) {
             stringDefaultValue = "";
         }
-
+        //从threadlocal里面获取缓冲区
         sbuf = SBUF_LOCAL.get();
         //初始化缓冲区512
         if (sbuf == null) {
@@ -102,15 +112,16 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
         }
     }
 
-    //读取下一个   类型
+    //读取下一个   字符类型存入token中
     public final void nextToken() {
     	//缓冲区字符的位置，也代表字符缓冲区字符数量
         sp = 0;
 
         for (;;) {
-            pos = bp;//当前有效字符记录当前扫描位置
+        	//pos当前有效字符记录当前扫描位置
+            pos = bp;
 
-            //ch是当前有效字符
+            //ch是当前有效字符，这里列出所有可能读取到的情况
             //识别到斜杠就是跳过注释
             if (ch == '/') {
                 skipComment();
@@ -244,7 +255,7 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
 
     }
 
-    //下一个指定的json字符种类  ，比如指定{ 跳到下一个{
+    //这个方法主要是根据期望的字符expect，判定expect对应的token
     public final void nextToken(int expect) {
         sp = 0;
 
@@ -1589,7 +1600,8 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
             return list2;
         } else {
             try {
-                Collection<String> list = (Collection<String>) type.newInstance();
+                @SuppressWarnings("unchecked")
+				Collection<String> list = (Collection<String>) type.newInstance();
                 return list;
             } catch (Exception e) {
                 throw new JSONException(e.getMessage(), e);
@@ -4886,7 +4898,8 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
         }
 
         //for(;;)也可以
-        for (int i = 0;;++i) {
+        for (@SuppressWarnings("unused")
+		int i = 0;;++i) {
             char ch = next();
             //读到0~9 A~F 正常，继续往下读
             if ((ch >= '0' && ch <= '9') || (ch >= 'A' && ch <= 'F')) {
@@ -5067,7 +5080,7 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
         }
     }
 
-
+    
     public static boolean isWhitespace(char ch) {
         // 专门调整了判断顺序
         return ch <= ' '  &&
@@ -5081,28 +5094,42 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
 
     
     //跳过注释
+    @Read
     protected void skipComment() {
+    	/* 思路
+    	 * 读到/时候会调skipComment，继续往下读，
+    	 * 注释分为//和/**\/两种
+    	 * 继续往下读第二个字符，如果读到/则是//，继续读一直到\n或eoi结束
+    	 * 如果读到**，则是/**\/，继续直到/结束
+    	 * 如果既不是*也不是/，就不是正规注释  异常
+    	 */	
         next();
+        /** 如果下一个字符还是左反斜杠/ */
         if (ch == '/') {
             for (;;) {
                 next();
+                /** 如果遇到换行符，继续读取下一个字符并返回 */
                 if (ch == '\n') {
                     next();
-                    return;
+                    return;//return到for  这个地方会不会多执行了一次next?
                 } else if (ch == EOI) {
+                	/** 如果已经遇到流结束，返回 */
                     return;
                 }
             }
         } else if (ch == '*') {
             next();
-
+            //遇到*继续往下读，读到/结束
             for (; ch != EOI;) {
+            	//如果遇到*,继续尝试读取下一个字符，看看是否是/   
                 if (ch == '*') {
                     next();
                     if (ch == '/') {
+                    	// 如果确实是/字符，提前预读下一个有效字符后终止 
                         next();
                         return;
                     } else {
+                    	// 遇到非/ 继续跳过读下一个字符    
                         continue;
                     }
                 }
@@ -5116,8 +5143,8 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
      * Append a character ch to sbuf.
      * 在缓冲区sbuf末尾加上ch
      */
+    @Read
     protected final void putChar(char ch) {
-    	
     	//如果缓冲区数组已经满了，扩容为2倍
         if (sp == sbuf.length) {
             char[] newsbuf = new char[sbuf.length * 2];
