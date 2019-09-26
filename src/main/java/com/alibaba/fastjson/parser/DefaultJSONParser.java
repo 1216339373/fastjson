@@ -30,6 +30,7 @@ import java.text.SimpleDateFormat;
 import java.util.*;
 
 import com.alibaba.fastjson.*;
+import com.alibaba.fastjson.annotation.Read;
 import com.alibaba.fastjson.parser.deserializer.*;
 import com.alibaba.fastjson.serializer.*;
 import com.alibaba.fastjson.util.TypeUtils;
@@ -41,7 +42,7 @@ import com.alibaba.fastjson.util.TypeUtils;
 public class DefaultJSONParser implements Closeable {
 	public final JSONLexer             lexer;
 
-    public final Object                input;
+    public final Object                input;//输入的对象
     public final SymbolTable           symbolTable;
 
     public final static int            NONE               = 0;
@@ -56,7 +57,7 @@ public class DefaultJSONParser implements Closeable {
     protected ParseContext             context;
     //序列化忽略的属性
     protected transient BeanContext    lastBeanContext;
-    
+    //java常用数据类型    hashSet类型
     private final static Set<Class<?>> primitiveClasses   = new HashSet<Class<?>>();
     
     //日期格式
@@ -100,8 +101,6 @@ public class DefaultJSONParser implements Closeable {
             primitiveClasses.add(clazz);
         }
     }
-
-    
     
     //主构造方法
     public DefaultJSONParser(final Object input, final JSONLexer lexer, final ParserConfig config){
@@ -110,6 +109,7 @@ public class DefaultJSONParser implements Closeable {
         this.config = config;
         this.symbolTable = config.symbolTable;
 
+        //读取第一个字符 第一个字符可能是{  或者[
         int ch = lexer.getCurrent();
         if (ch == '{') {
             lexer.next();
@@ -118,7 +118,7 @@ public class DefaultJSONParser implements Closeable {
             lexer.next();
             ((JSONLexerBase) lexer).token = JSONToken.LBRACKET;
         } else {
-            lexer.nextToken(); // prime the pump
+            lexer.nextToken(); // prime the pump 准备好泵
         }
     }
 
@@ -130,31 +130,34 @@ public class DefaultJSONParser implements Closeable {
         return input.toString();
     }
       
+    
+    //
     public Object parse() {
         return parse(null);
     }
     
     public Object parse(Object fieldName) {
         final JSONLexer lexer = this.lexer;
+        //先判断一下读到的字符属于什么类别
         switch (lexer.token()) {
-            case SET:
+            case SET://hashset
                 lexer.nextToken();
                 HashSet<Object> set = new HashSet<Object>();
                 parseArray(set, fieldName);
                 return set;
-            case TREE_SET:
+            case TREE_SET://treeset
                 lexer.nextToken();
                 TreeSet<Object> treeSet = new TreeSet<Object>();
                 parseArray(treeSet, fieldName);
                 return treeSet;
-            case LBRACKET:
+            case LBRACKET://左方括号[
                 JSONArray array = new JSONArray();
                 parseArray(array, fieldName);
                 if (lexer.isEnabled(Feature.UseObjectArray)) {
                     return array.toArray();
                 }
                 return array;
-            case LBRACE:
+            case LBRACE://左花括号{
                 JSONObject object = new JSONObject(lexer.isEnabled(Feature.OrderedField));
                 return parseObject(object, fieldName);
 //            case LBRACE: {
@@ -167,7 +170,7 @@ public class DefaultJSONParser implements Closeable {
 //                }
 //                return new JSONObject(map);
 //            }
-            case LITERAL_INT:
+            case LITERAL_INT://解析int字段
                 Number intValue = lexer.integerValue();
                 lexer.nextToken();
                 return intValue;
@@ -227,8 +230,9 @@ public class DefaultJSONParser implements Closeable {
                 byte[] bytes = lexer.bytesValue();
                 lexer.nextToken();
                 return bytes;
-            case IDENTIFIER:
+            case IDENTIFIER://标识符
                 String identifier = lexer.stringVal();
+                //判断NaN
                 if ("NaN".equals(identifier)) {
                     lexer.nextToken();
                     return null;
@@ -249,7 +253,9 @@ public class DefaultJSONParser implements Closeable {
         return parse(null);
     }
     
-    public JSONObject parseObject() {
+  //解析单个对象  
+    @SuppressWarnings({ "unchecked", "rawtypes" })
+	public JSONObject parseObject() {
         JSONObject object = new JSONObject(lexer.isEnabled(Feature.OrderedField));
         Object parsedObject = parseObject(object);
 
@@ -273,17 +279,19 @@ public class DefaultJSONParser implements Closeable {
             lexer.nextToken();
             return null;
         }
-
+        //右花括号
         if (lexer.token() == JSONToken.RBRACE) {
             lexer.nextToken();
             return object;
         }
 
+        //string
         if (lexer.token() == JSONToken.LITERAL_STRING && lexer.stringVal().length() == 0) {
             lexer.nextToken();
             return object;
         }
 
+        //左花括号
         if (lexer.token() != JSONToken.LBRACE && lexer.token() != JSONToken.COMMA) {
             throw new JSONException("syntax error, expect {, actual " + lexer.tokenName() + ", " + lexer.info());
         }
@@ -296,7 +304,9 @@ public class DefaultJSONParser implements Closeable {
             for (;;) {
                 lexer.skipWhitespace();
                 char ch = lexer.getCurrent();
+                //允许多重逗号,如果设为true,
                 if (lexer.isEnabled(Feature.AllowArbitraryCommas)) {
+                	//则遇到多个逗号会直接跳过;
                     while (ch == ',') {
                         lexer.next();
                         lexer.skipWhitespace();
@@ -587,7 +597,8 @@ public class DefaultJSONParser implements Closeable {
 
                     JSONArray list = new JSONArray();
 
-                    final boolean parentIsArray = fieldName != null && fieldName.getClass() == Integer.class;
+                    @SuppressWarnings("unused")
+					final boolean parentIsArray = fieldName != null && fieldName.getClass() == Integer.class;
 //                    if (!parentIsArray) {
 //                        this.setContext(context);
 //                    }
@@ -844,7 +855,7 @@ public class DefaultJSONParser implements Closeable {
         }
     }
 
-    
+//解析数组 集合    
     @SuppressWarnings({ "unchecked", "rawtypes" })
     public void parseArray(Type type, Collection array, Object fieldName) {
         int token = lexer.token();
@@ -1378,6 +1389,7 @@ public class DefaultJSONParser implements Closeable {
         return null;
     }
 
+    
     public void handleResovleTask(Object value) {
         if (resolveTaskList == null) {
             return;
@@ -1455,7 +1467,8 @@ public class DefaultJSONParser implements Closeable {
         }
     }
 
-    public Object parse(PropertyProcessable object, Object fieldName) {
+    @SuppressWarnings("rawtypes")
+	public Object parse(PropertyProcessable object, Object fieldName) {
         if (lexer.token() != JSONToken.LBRACE) {
             String msg = "syntax error, expect {, actual " + lexer.tokenName();
             if (fieldName instanceof String) {
@@ -1617,8 +1630,9 @@ public class DefaultJSONParser implements Closeable {
         if (lexer.token() == token) {
             lexer.nextToken();//就这个有差别
         } else {
-            throw new JSONException("syntax error, expect " + JSONToken.name(token) + ", actual "
-                                    + JSONToken.name(lexer.token()));
+        	throwException(token);
+//            throw new JSONException("syntax error, expect " + JSONToken.name(token) + ", actual "
+//                                    + JSONToken.name(lexer.token()));
         }
     }
 
@@ -1628,14 +1642,21 @@ public class DefaultJSONParser implements Closeable {
         if (lexer.token() == token) {
             lexer.nextToken(nextExpectToken);
         } else {
-            throwException(token);
+        	throwException(token);
+//            throw new JSONException("syntax error, expect " + JSONToken.name(token) + ", actual "
+//            		+ JSONToken.name(lexer.token()));
         }
     }
-//这个方法可以并到上面一个
-    public void throwException(int token) {
+    /**
+     * @see JavaBeanDeserializer parser.throwException(token);
+     * @param token
+     * @return
+     */
+    @Read(desc="JavaBeanDeserializer里面有调用 ")
+    public JSONException throwException(int token) {
         throw new JSONException("syntax error, expect " + JSONToken.name(token) + ", actual "
-                                + JSONToken.name(lexer.token()));
-    }    
+        		+ JSONToken.name(lexer.token()));    	
+    }
     
     private void addContext(ParseContext context) {
         int i = contextArrayIndex++;
@@ -1650,6 +1671,7 @@ public class DefaultJSONParser implements Closeable {
         contextArray[i] = context;
     }
     
+    //内部类
     public static class ResolveTask {
 
         public final ParseContext context;
@@ -1743,13 +1765,12 @@ public class DefaultJSONParser implements Closeable {
     public DefaultJSONParser(final JSONLexer lexer, final ParserConfig config){
         this(null, lexer, config);
     }
-    
+
     public <T> List<T> parseArray(Class<T> clazz) {
-        List<T> array = new ArrayList<T>();
-        parseArray(clazz, array);
-        return array;
+    	List<T> array = new ArrayList<T>();
+    	parseArray(clazz, array);
+    	return array;
     }
-    
     public void parseArray(Class<?> clazz, @SuppressWarnings("rawtypes") Collection array) {
         parseArray((Type) clazz, array);
     }
@@ -1763,23 +1784,20 @@ public class DefaultJSONParser implements Closeable {
     public final void parseArray(final Collection array) {
         parseArray(array, null);
     }
-    
     //重载略过
     // compatible
     @SuppressWarnings("unchecked")
     public <T> T parseObject(Class<T> clazz) {
-        return (T) parseObject(clazz, null);
+    	return (T) parseObject(clazz, null);
     }
-
-  //重载略过
+    
+    //重载略过
     public <T> T parseObject(Type type) {
-        return parseObject(type, null);
+    	return parseObject(type, null);
     }
     
     @SuppressWarnings("rawtypes")
     public Object parseObject(final Map object) {
-        return parseObject(object, null);
+    	return parseObject(object, null);
     }
-    
-    
 }

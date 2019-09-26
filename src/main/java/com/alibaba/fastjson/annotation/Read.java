@@ -11,9 +11,9 @@ import java.lang.annotation.Target;
  * 2019年9月25日 上午11:49:46
  */
 @Retention(RetentionPolicy.SOURCE)
-@Target(value=ElementType.METHOD)
+@Target(value= {ElementType.METHOD,ElementType.CONSTRUCTOR})
 public @interface Read {
-
+	String desc() default "";
 }
 
 

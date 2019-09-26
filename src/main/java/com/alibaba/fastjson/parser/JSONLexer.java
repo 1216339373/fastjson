@@ -22,7 +22,7 @@ import java.util.TimeZone;
 
 public interface JSONLexer {
 
-    char EOI            = 0x1A;
+    char EOI            = 0x1A;//结束符
     int  NOT_MATCH      = -1;
     int  NOT_MATCH_NAME = -2;
     int  UNKNOWN        = 0;//未知
@@ -42,23 +42,13 @@ public interface JSONLexer {
 
     //跳到下一个token类型
     void nextToken();
-
     //跳到下一个指定的token类型
     void nextToken(int expect);
-
-    char getCurrent();
-
+    void nextTokenWithColon();
+    void nextTokenWithColon(int expect);
     char next();
 
     void resetStringPosition();
-
-    int pos();//当前扫描位置
-
-    Number integerValue();
-
-    BigDecimal decimalValue();
-
-    Number decimalValue(boolean decimal);
 
     String stringVal();
 
@@ -68,25 +58,24 @@ public interface JSONLexer {
 
     void config(Feature feature, boolean state);
 
-
-    int intValue();
-
-    void nextTokenWithColon();
-
-    void nextTokenWithColon(int expect);
+    boolean isRef();
 
     boolean isBlankInput();
 
     void close();
+    String info();
 
+    char getCurrent();
+    int pos();//当前扫描位置
+    int intValue();
+
+    //
     long longValue();
-
-    boolean isRef();
-
+    Number integerValue();
+    BigDecimal decimalValue();
+    Number decimalValue(boolean decimal);
     String numberString();
-
     byte[] bytesValue();
-
     float floatValue();
 
     //扫描常用的类型
@@ -108,8 +97,6 @@ public interface JSONLexer {
     String scanSymbolWithSeperator(final SymbolTable symbolTable, char serperator);
     //扫描字符串数组
     void scanStringArray(Collection<String> collection, char seperator);
-
-    String info();
 
 /*********get set*********************/    
     int getFeatures();

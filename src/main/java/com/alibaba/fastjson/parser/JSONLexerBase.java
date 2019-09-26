@@ -42,7 +42,7 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
     protected int pos;
     protected int features;
     /** 当前有效字符 */
-    protected char  ch;
+    protected char  currentCursor;
     /** 流(或者json字符串)中当前的位置，每次读取字符会递增 */
     protected int   bp;
 
@@ -71,13 +71,13 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
     /** 字符缓冲区的索引，指向下一个可写
      *  字符的位置，也代表字符缓冲区字符数量
      */
-    protected int  sp;
+    protected int  sbufPos;
     /**
      * number start position
      * 可以理解为 找到token时 token的首字符位置
      * 和bp不一样，这个不会递增，会在开始token前记录一次
      */
-    protected int  np;
+    protected int  numberStartPos;
     //赋值给缓冲区的数组
     private final static ThreadLocal<char[]> SBUF_LOCAL         = new ThreadLocal<char[]>();
 
@@ -97,6 +97,7 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
         }
     }
     
+    @Read
     public JSONLexerBase(int features){
         this.features = features;
 
@@ -113,9 +114,10 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
     }
 
     //读取下一个   字符类型存入token中
+    @Read(desc="这个是最主要的方法，对比nextToken和next区别")
     public final void nextToken() {
     	//缓冲区字符的位置，也代表字符缓冲区字符数量
-        sp = 0;
+        sbufPos = 0;
 
         for (;;) {
         	//pos当前有效字符记录当前扫描位置
@@ -123,33 +125,33 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
 
             //ch是当前有效字符，这里列出所有可能读取到的情况
             //识别到斜杠就是跳过注释
-            if (ch == '/') {
+            if (currentCursor == '/') {
                 skipComment();
                 continue;
             }
             //"是字符
-            if (ch == '"') {
+            if (currentCursor == '"') {
                 scanString();
                 return;
             }
             //逗号是读取下一个
-            if (ch == ',') {
+            if (currentCursor == ',') {
                 next();
                 token = COMMA;//COMMA逗号
                 return;
             }
             //0~9是数字
-            if (ch >= '0' && ch <= '9') {
+            if (currentCursor >= '0' && currentCursor <= '9') {
                 scanNumber();
                 return;
             }
             //负数
-            if (ch == '-') {
+            if (currentCursor == '-') {
                 scanNumber();
                 return;
             }
 
-            switch (ch) {
+            switch (currentCursor) {
             	//读取到单引号
                 case '\'':
                 	//不允许单引号，异常
@@ -240,12 +242,12 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
                         token = EOF;
                         eofPos = pos = bp;
                     } else {
-                        if (ch <= 31 || ch == 127) {
+                        if (currentCursor <= 31 || currentCursor == 127) {
                             next();
                             break;
                         }
 
-                        lexError("illegal.char", String.valueOf((int) ch));
+                        lexError("illegal.char", String.valueOf((int) currentCursor));
                         next();
                     }
 
@@ -256,72 +258,74 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
     }
 
     //这个方法主要是根据期望的字符expect，判定expect对应的token
+    //根据期望的类型，赋值给token，让光标ch跳过去
+    @Read
     public final void nextToken(int expect) {
-        sp = 0;
+        sbufPos = 0;
 
         for (;;) {
             switch (expect) {
                 case JSONToken.LBRACE:
-                    if (ch == '{') {
+                    if (currentCursor == '{') {
                         token = JSONToken.LBRACE;
                         next();
                         return;
                     }
-                    if (ch == '[') {
+                    if (currentCursor == '[') {
                         token = JSONToken.LBRACKET;
                         next();
                         return;
                     }
                     break;
                 case JSONToken.COMMA:
-                    if (ch == ',') {
+                    if (currentCursor == ',') {
                         token = JSONToken.COMMA;
                         next();
                         return;
                     }
 
-                    if (ch == '}') {
+                    if (currentCursor == '}') {
                         token = JSONToken.RBRACE;
                         next();
                         return;
                     }
 
-                    if (ch == ']') {
+                    if (currentCursor == ']') {
                         token = JSONToken.RBRACKET;
                         next();
                         return;
                     }
 
-                    if (ch == EOI) {
+                    if (currentCursor == EOI) {
                         token = JSONToken.EOF;
                         return;
                     }
 
-                    if (ch == 'n') {
+                    if (currentCursor == 'n') {
                         scanNullOrNew(false);
                         return;
                     }
                     break;
                 case JSONToken.LITERAL_INT:
-                    if (ch >= '0' && ch <= '9') {
+                    if (currentCursor >= '0' && currentCursor <= '9') {
                         pos = bp;
                         scanNumber();
                         return;
                     }
 
-                    if (ch == '"') {
+                    if (currentCursor == '"') {
                         pos = bp;
                         scanString();
                         return;
                     }
 
-                    if (ch == '[') {
+                    if (currentCursor == '[') {
                         token = JSONToken.LBRACKET;
                         next();
                         return;
                     }
 
-                    if (ch == '{') {
+                    if (currentCursor == '{') {
                         token = JSONToken.LBRACE;
                         next();
                         return;
@@ -329,51 +333,51 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
 
                     break;
                 case JSONToken.LITERAL_STRING:
-                    if (ch == '"') {
+                    if (currentCursor == '"') {
                         pos = bp;
                         scanString();
                         return;
                     }
 
-                    if (ch >= '0' && ch <= '9') {
+                    if (currentCursor >= '0' && currentCursor <= '9') {
                         pos = bp;
                         scanNumber();
                         return;
                     }
 
-                    if (ch == '[') {
+                    if (currentCursor == '[') {
                         token = JSONToken.LBRACKET;
                         next();
                         return;
                     }
 
-                    if (ch == '{') {
+                    if (currentCursor == '{') {
                         token = JSONToken.LBRACE;
                         next();
                         return;
                     }
                     break;
                 case JSONToken.LBRACKET:
-                    if (ch == '[') {
+                    if (currentCursor == '[') {
                         token = JSONToken.LBRACKET;
                         next();
                         return;
                     }
 
-                    if (ch == '{') {
+                    if (currentCursor == '{') {
                         token = JSONToken.LBRACE;
                         next();
                         return;
                     }
                     break;
                 case JSONToken.RBRACKET:
-                    if (ch == ']') {
+                    if (currentCursor == ']') {
                         token = JSONToken.RBRACKET;
                         next();
                         return;
                     }
                 case JSONToken.EOF:
-                    if (ch == EOI) {
+                    if (currentCursor == EOI) {
                         token = JSONToken.EOF;
                         return;
                     }
@@ -385,7 +389,13 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
                     break;
             }
 
-            if (ch == ' ' || ch == '\n' || ch == '\r' || ch == '\t' || ch == '\f' || ch == '\b') {
+            //跳过空白符
+            if (currentCursor == ' ' 
+            		|| currentCursor == '\n' 
+            		|| currentCursor == '\r' 
+            		|| currentCursor == '\t' 
+            		|| currentCursor == '\f' 
+            		|| currentCursor == '\b') {
                 next();
                 continue;
             }
@@ -395,197 +405,63 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
         }
     }
 
+    //下一个标识符
     public final void nextIdent() {
-        while (isWhitespace(ch)) {
+        while (isWhitespace(currentCursor)) {
             next();
         }
-        if (ch == '_' || ch == '$' || Character.isLetter(ch)) {
+        if (currentCursor == '_' || currentCursor == '$' || Character.isLetter(currentCursor)) {
             scanIdent();
         } else {
             nextToken();
         }
     }
-
     
-    //下一个冒号
+    //下一个冒号，这两个方法完全可以合并
+    @Read
     public final void nextTokenWithColon() {
         nextTokenWithChar(':');
     }
-    //跳到下一个指定字符类型
+    @Deprecated
+    public final void nextTokenWithColon(int expect) {
+        nextTokenWithChar(':');
+    }
+    
+    //跳到下一个指定字符的类型  主要通过next和nexttoken
+    @Read
     public final void nextTokenWithChar(char expect) {
-        sp = 0;
+        sbufPos = 0;
 
         for (;;) {
-            if (ch == expect) {
+            if (currentCursor == expect) {
                 next();
                 nextToken();
-                return;
+                return;//这里return直接就是结束整个方法
             }
 
-            if (ch == ' ' || ch == '\n' || ch == '\r' || ch == '\t' || ch == '\f' || ch == '\b') {
+            //跳过这些空白符
+            if (currentCursor == ' ' 
+            		|| currentCursor == '\n' 
+            		|| currentCursor == '\r' 
+            		|| currentCursor == '\t' 
+            		|| currentCursor == '\f' 
+            		|| currentCursor == '\b') {
                 next();
                 continue;
             }
 
-            throw new JSONException("not match " + expect + " - " + ch + ", info : " + this.info());
+            throw new JSONException("not match " + expect + " - " + currentCursor + ", info : " + this.info());
         }
     }
 
-
-
-    public final String tokenName() {
-        return JSONToken.name(token);
-    }
-
-
-    public final Number integerValue() throws NumberFormatException {
-        long result = 0;
-        boolean negative = false;
-        if (np == -1) {
-            np = 0;
-        }
-        int i = np, max = np + sp;
-        long limit;
-        long multmin;
-        int digit;
-
-        char type = ' ';
-
-        switch (charAt(max - 1)) {
-            case 'L':
-                max--;
-                type = 'L';
-                break;
-            case 'S':
-                max--;
-                type = 'S';
-                break;
-            case 'B':
-                max--;
-                type = 'B';
-                break;
-            default:
-                break;
-        }
-
-        if (charAt(np) == '-') {
-            negative = true;
-            limit = Long.MIN_VALUE;
-            i++;
-        } else {
-            limit = -Long.MAX_VALUE;
-        }
-        multmin = MULTMIN_RADIX_TEN;
-        if (i < max) {
-            digit = charAt(i++) - '0';
-            result = -digit;
-        }
-        while (i < max) {
-            // Accumulating negatively avoids surprises near MAX_VALUE
-            digit = charAt(i++) - '0';
-            if (result < multmin) {
-                return new BigInteger(numberString());
-            }
-            result *= 10;
-            if (result < limit + digit) {
-                return new BigInteger(numberString());
-            }
-            result -= digit;
-        }
-
-        if (negative) {
-            if (i > np + 1) {
-                if (result >= Integer.MIN_VALUE && type != 'L') {
-                    if (type == 'S') {
-                        return (short) result;
-                    }
-
-                    if (type == 'B') {
-                        return (byte) result;
-                    }
-
-                    return (int) result;
-                }
-                return result;
-            } else { /* Only got "-" */
-                throw new NumberFormatException(numberString());
-            }
-        } else {
-            result = -result;
-            if (result <= Integer.MAX_VALUE && type != 'L') {
-                if (type == 'S') {
-                    return (short) result;
-                }
-
-                if (type == 'B') {
-                    return (byte) result;
-                }
-
-                return (int) result;
-            }
-            return result;
-        }
-    }
-
-    public final void nextTokenWithColon(int expect) {
-        nextTokenWithChar(':');
-    }
-
-    public float floatValue() {
-        String strVal = numberString();
-        float floatValue = Float.parseFloat(strVal);
-        if (floatValue == 0 || floatValue == Float.POSITIVE_INFINITY) {
-            char c0 = strVal.charAt(0);
-            if (c0 > '0' && c0 <= '9') {
-                throw new JSONException("float overflow : " + strVal);
-            }
-        }
-        return floatValue;
-    }
-
-    public double doubleValue() {
-        return Double.parseDouble(numberString());
-    }
-
-    public void config(Feature feature, boolean state) {
-        features = Feature.config(features, feature, state);
-
-        if ((features & Feature.InitStringFieldAsEmpty.mask) != 0) {
-            stringDefaultValue = "";
-        }
-    }
-
-    public final boolean isEnabled(Feature feature) {
-        return isEnabled(feature.mask);
-    }
-
-    public final boolean isEnabled(int feature) {
-        return (this.features & feature) != 0;
-    }
-
-    public final boolean isEnabled(int features, int feature) {
-        return (this.features & feature) != 0 || (features & feature) != 0;
-    }
-
-
-
-    // public final char next() {
-    // ch = doNext();
-    //// if (ch == '/' && (this.features & Feature.AllowComment.mask) != 0) {
-    //// skipComment();
-    //// }
-    // return ch;
-    // }
-
-    
     public final String scanSymbol(final SymbolTable symbolTable) {
         skipWhitespace();
 
-        if (ch == '"') {
+        if (currentCursor == '"') {
             return scanSymbol(symbolTable, '"');
         }
 
-        if (ch == '\'') {
+        if (currentCursor == '\'') {
             if (!isEnabled(Feature.AllowSingleQuotes)) {
                 throw new JSONException("syntax error");
             }
@@ -593,19 +469,19 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
             return scanSymbol(symbolTable, '\'');
         }
 
-        if (ch == '}') {
+        if (currentCursor == '}') {
             next();
             token = JSONToken.RBRACE;
             return null;
         }
 
-        if (ch == ',') {
+        if (currentCursor == ',') {
             next();
             token = JSONToken.COMMA;
             return null;
         }
 
-        if (ch == EOI) {
+        if (currentCursor == EOI) {
             token = JSONToken.EOF;
             return null;
         }
@@ -623,8 +499,8 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
     public final String scanSymbol(final SymbolTable symbolTable, final char quote) {
         int hash = 0;
 
-        np = bp;
-        sp = 0;
+        numberStartPos = bp;
+        sbufPos = 0;
         boolean hasSpecial = false;
         char chLocal;
         for (;;) {
@@ -642,10 +518,10 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
                 if (!hasSpecial) {
                     hasSpecial = true;
 
-                    if (sp >= sbuf.length) {
+                    if (sbufPos >= sbuf.length) {
                         int newCapcity = sbuf.length * 2;
-                        if (sp > newCapcity) {
-                            newCapcity = sp;
+                        if (sbufPos > newCapcity) {
+                            newCapcity = sbufPos;
                         }
                         char[] newsbuf = new char[newCapcity];
                         System.arraycopy(sbuf, 0, newsbuf, 0, sbuf.length);
@@ -654,7 +530,7 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
 
                     // text.getChars(np + 1, np + 1 + sp, sbuf, 0);
                     // System.arraycopy(this.buf, np + 1, sbuf, 0, sp);
-                    arrayCopy(np + 1, sbuf, 0, sp);
+                    arrayCopy(numberStartPos + 1, sbuf, 0, sbufPos);
                 }
 
                 chLocal = next();
@@ -734,8 +610,8 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
                         putChar('\\');
                         break;
                     case 'x':
-                        char x1 = ch = next();
-                        char x2 = ch = next();
+                        char x1 = currentCursor = next();
+                        char x2 = currentCursor = next();
 
                         int x_val = digits[x1] * 16 + digits[x2];
                         char x_char = (char) x_val;
@@ -752,7 +628,7 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
                         putChar((char) val);
                         break;
                     default:
-                        this.ch = chLocal;
+                        this.currentCursor = chLocal;
                         throw new JSONException("unclosed.str.lit");
                 }
                 continue;
@@ -761,14 +637,14 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
             hash = 31 * hash + chLocal;
 
             if (!hasSpecial) {
-                sp++;
+                sbufPos++;
                 continue;
             }
 
-            if (sp == sbuf.length) {
+            if (sbufPos == sbuf.length) {
                 putChar(chLocal);
             } else {
-                sbuf[sp++] = chLocal;
+                sbuf[sbufPos++] = chLocal;
             }
         }
 
@@ -778,28 +654,20 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
         if (!hasSpecial) {
             // return this.text.substring(np + 1, np + 1 + sp).intern();
             int offset;
-            if (np == -1) {
+            if (numberStartPos == -1) {
                 offset = 0;
             } else {
-                offset = np + 1;
+                offset = numberStartPos + 1;
             }
-            value = addSymbol(offset, sp, hash, symbolTable);
+            value = addSymbol(offset, sbufPos, hash, symbolTable);
         } else {
-            value = symbolTable.addSymbol(sbuf, 0, sp, hash);
+            value = symbolTable.addSymbol(sbuf, 0, sbufPos, hash);
         }
 
-        sp = 0;
+        sbufPos = 0;
         this.next();
 
         return value;
-    }
-
-    public final void resetStringPosition() {
-        this.sp = 0;
-    }
-
-    public String info() {
-        return "";
     }
 
     public final String scanSymbolUnQuoted(final SymbolTable symbolTable) {
@@ -807,11 +675,11 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
             bp = 0; // adjust
         }
         final boolean[] firstIdentifierFlags = IOUtils.firstIdentifierFlags;
-        final char first = ch;
+        final char first = currentCursor;
 
-        final boolean firstFlag = ch >= firstIdentifierFlags.length || firstIdentifierFlags[first];
+        final boolean firstFlag = currentCursor >= firstIdentifierFlags.length || firstIdentifierFlags[first];
         if (!firstFlag) {
-            throw new JSONException("illegal identifier : " + ch //
+            throw new JSONException("illegal identifier : " + currentCursor //
                     + info());
         }
 
@@ -819,8 +687,8 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
 
         int hash = first;
 
-        np = bp;
-        sp = 1;
+        numberStartPos = bp;
+        sbufPos = 1;
         char chLocal;
         for (;;) {
             chLocal = next();
@@ -833,127 +701,155 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
 
             hash = 31 * hash + chLocal;
 
-            sp++;
+            sbufPos++;
             continue;
         }
 
-        this.ch = charAt(bp);
+        this.currentCursor = charAt(bp);
         token = JSONToken.IDENTIFIER;
 
         final int NULL_HASH = 3392903;
-        if (sp == 4 && hash == NULL_HASH && charAt(np) == 'n' && charAt(np + 1) == 'u' && charAt(np + 2) == 'l'
-                && charAt(np + 3) == 'l') {
+        if (sbufPos == 4 && hash == NULL_HASH && charAt(numberStartPos) == 'n' && charAt(numberStartPos + 1) == 'u' && charAt(numberStartPos + 2) == 'l'
+                && charAt(numberStartPos + 3) == 'l') {
             return null;
         }
 
         // return text.substring(np, np + sp).intern();
 
         if (symbolTable == null) {
-            return subString(np, sp);
+            return subString(numberStartPos, sbufPos);
         }
 
-        return this.addSymbol(np, sp, hash, symbolTable);
+        return this.addSymbol(numberStartPos, sbufPos, hash, symbolTable);
         // return symbolTable.addSymbol(buf, np, sp, hash);
     }
 
-
+    
+    @Read(desc="主要是对特殊字符的处理")
     public final void scanString() {
-        np = bp;
+    	/** 记录当前流中token的开始位置, np指向引号的索引 */
+        numberStartPos = bp;
         hasSpecial = false;
         char ch;
         for (;;) {
+        	/** 读取当前字符串的字符 */
             ch = next();
-
+            /** 如果遇到字符串结束符"， 则结束 */
             if (ch == '\"') {
                 break;
             }
 
             if (ch == EOI) {
+            	/** 如果遇到了结束符EOI，但是没有遇到流的结尾，添加EOI结束符 */
                 if (!isEOF()) {
                     putChar((char) EOI);
                     continue;
                 }
                 throw new JSONException("unclosed string : " + ch);
             }
-
+            
+            //读取到了反斜杠\
             if (ch == '\\') {
                 if (!hasSpecial) {
+                	/** 第一次遇到\认为是特殊符号 */
                     hasSpecial = true;
 
-                    if (sp >= sbuf.length) {
+                    /** 如果buffer空间不够，执行2倍扩容 */
+                    if (sbufPos >= sbuf.length) {
                         int newCapcity = sbuf.length * 2;
-                        if (sp > newCapcity) {
-                            newCapcity = sp;
+                        if (sbufPos > newCapcity) {
+                        	//如果扩容了还不够，则直接拿sp的长度
+                            newCapcity = sbufPos;
                         }
                         char[] newsbuf = new char[newCapcity];
                         System.arraycopy(sbuf, 0, newsbuf, 0, sbuf.length);
                         sbuf = newsbuf;
                     }
 
-                    copyTo(np + 1, sp, sbuf);
+                    copyTo(numberStartPos + 1, sbufPos, sbuf);
                     // text.getChars(np + 1, np + 1 + sp, sbuf, 0);
                     // System.arraycopy(buf, np + 1, sbuf, 0, sp);
                 }
 
                 ch = next();
-
+                /** 处理转译字符逻辑   这里为什么要这样处理呢?*/
                 switch (ch) {
                     case '0':
+                    	/** 空字符 */
                         putChar('\0');
                         break;
                     case '1':
+                    	/** 标题开始 */
                         putChar('\1');
                         break;
                     case '2':
+                    	/** 正文开始 */
                         putChar('\2');
                         break;
                     case '3':
+                    	/** 正文结束 */
                         putChar('\3');
                         break;
                     case '4':
+                    	/** 传输结束 */
                         putChar('\4');
                         break;
                     case '5':
+                    	/** 请求 */
                         putChar('\5');
                         break;
                     case '6':
+                    	/** 收到通知 */
                         putChar('\6');
                         break;
                     case '7':
+                    	/** 响铃 */
                         putChar('\7');
                         break;
                     case 'b': // 8
+                    	/** 退格 */
                         putChar('\b');
                         break;
                     case 't': // 9
+                    	/** 水平制表符 */
                         putChar('\t');
                         break;
                     case 'n': // 10
+                    	/** 换行键 */
                         putChar('\n');
                         break;
                     case 'v': // 11
+                    	/** 垂直制表符 */
                         putChar('\u000B');
                         break;
                     case 'f': // 12
+                    	/** 换页键  不作处理，不放入缓冲*/
                     case 'F':
+                    	/** 换页键 */
                         putChar('\f');
                         break;
                     case 'r': // 13
+                    	/** 回车键 */
                         putChar('\r');
                         break;
                     case '"': // 34
+                    	/** 双引号 */
                         putChar('"');
                         break;
                     case '\'': // 39
+                    	/** 闭单引号 */
                         putChar('\'');
                         break;
                     case '/': // 47
+                    	/** 斜杠 */
                         putChar('/');
                         break;
                     case '\\': // 92
+                    	/** 反斜杠 */
                         putChar('\\');
                         break;
                     case 'x':
+                    	/** 小写字母x, 标识一个字符 */
                         char x1 = next();
                         char x2 = next();
 
@@ -966,225 +862,183 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
                         if (!hex1 || !hex2) {
                             throw new JSONException("invalid escape character \\x" + x1 + x2);
                         }
-
+                        /** x1 左移4位 + x2 */
                         char x_char = (char) (digits[x1] * 16 + digits[x2]);
                         putChar(x_char);
                         break;
                     case 'u':
+                    	/** 小写字母u, 标识一个字符 往下读4个*/
                         char u1 = next();
                         char u2 = next();
                         char u3 = next();
                         char u4 = next();
+                        //从16进制转成10进制的数值
                         int val = Integer.parseInt(new String(new char[] { u1, u2, u3, u4 }), 16);
                         putChar((char) val);
                         break;
                     default:
-                        this.ch = ch;
+                        this.currentCursor = ch;
                         throw new JSONException("unclosed string : " + ch);
                 }
                 continue;
             }
-
+            /** 没有转译字符，递增buffer字符位置 */
             if (!hasSpecial) {
-                sp++;
+                sbufPos++;
                 continue;
             }
 
-            if (sp == sbuf.length) {
+            //需要扩容了
+            if (sbufPos == sbuf.length) {
                 putChar(ch);
             } else {
-                sbuf[sp++] = ch;
+            	//不要扩容
+                sbuf[sbufPos++] = ch;
             }
         }
 
+        //读到的为string类型
         token = JSONToken.LITERAL_STRING;
-        this.ch = next();
+        /** 自动预读下一个字符 */
+        this.currentCursor = next();
     }
-
-    public Calendar getCalendar() {
-        return this.calendar;
-    }
-
-    public TimeZone getTimeZone() {
-        return timeZone;
-    }
-
-    public void setTimeZone(TimeZone timeZone) {
-        this.timeZone = timeZone;
-    }
-
-    public Locale getLocale() {
-        return locale;
-    }
-
-    public void setLocale(Locale locale) {
-        this.locale = locale;
-    }
-
-    public final int intValue() {
-        if (np == -1) {
-            np = 0;
-        }
-
-        int result = 0;
-        boolean negative = false;
-        int i = np, max = np + sp;
-        int limit;
-        int digit;
-
-        if (charAt(np) == '-') {
-            negative = true;
-            limit = Integer.MIN_VALUE;
-            i++;
-        } else {
-            limit = -Integer.MAX_VALUE;
-        }
-        long multmin = INT_MULTMIN_RADIX_TEN;
-        if (i < max) {
-            digit = charAt(i++) - '0';
-            result = -digit;
-        }
-        while (i < max) {
-            // Accumulating negatively avoids surprises near MAX_VALUE
-            char chLocal = charAt(i++);
-
-            if (chLocal == 'L' || chLocal == 'S' || chLocal == 'B') {
-                break;
-            }
-
-            digit = chLocal - '0';
-
-            if (result < multmin) {
-                throw new NumberFormatException(numberString());
-            }
-            result *= 10;
-            if (result < limit + digit) {
-                throw new NumberFormatException(numberString());
-            }
-            result -= digit;
-        }
-
-        if (negative) {
-            if (i > np + 1) {
-                return result;
-            } else { /* Only got "-" */
-                throw new NumberFormatException(numberString());
-            }
-        } else {
-            return -result;
-        }
-    }
-
-
-
-    public void close() {
-        if (sbuf.length <= 1024 * 8) {
-            SBUF_LOCAL.set(sbuf);
-        }
-        this.sbuf = null;
-    }
-
-    public final boolean isRef() {
-        if (sp != 4) {
-            return false;
-        }
-
-        return charAt(np + 1) == '$' //
-                && charAt(np + 2) == 'r' //
-                && charAt(np + 3) == 'e' //
-                && charAt(np + 4) == 'f';
-    }
-
-
-    public final int scanType(String type) {
-        matchStat = UNKNOWN;
-
-        if (!charArrayCompare(typeFieldName)) {
-            return NOT_MATCH_NAME;
-        }
-
-        int bpLocal = this.bp + typeFieldName.length;
-
-        final int typeLength = type.length();
-        for (int i = 0; i < typeLength; ++i) {
-            if (type.charAt(i) != charAt(bpLocal + i)) {
-                return NOT_MATCH;
-            }
-        }
-        bpLocal += typeLength;
-        if (charAt(bpLocal) != '"') {
-            return NOT_MATCH;
-        }
-
-        this.ch = charAt(++bpLocal);
-
-        if (ch == ',') {
-            this.ch = charAt(++bpLocal);
-            this.bp = bpLocal;
-            token = JSONToken.COMMA;
-            return VALUE;
-        } else if (ch == '}') {
-            ch = charAt(++bpLocal);
-            if (ch == ',') {
-                token = JSONToken.COMMA;
-                this.ch = charAt(++bpLocal);
-            } else if (ch == ']') {
-                token = JSONToken.RBRACKET;
-                this.ch = charAt(++bpLocal);
-            } else if (ch == '}') {
-                token = JSONToken.RBRACE;
-                this.ch = charAt(++bpLocal);
-            } else if (ch == EOI) {
-                token = JSONToken.EOF;
-            } else {
-                return NOT_MATCH;
-            }
-            matchStat = END;
-        }
-
-        this.bp = bpLocal;
-        return matchStat;
-    }
-
-    public final boolean matchField(char[] fieldName) {
-        for (;;) {
-            if (!charArrayCompare(fieldName)) {
-                if (isWhitespace(ch)) {
-                    next();
-                    continue;
-                }
-                return false;
-            } else {
-                break;
-            }
-        }
-
-        bp = bp + fieldName.length;
-        ch = charAt(bp);
-
-        if (ch == '{') {
-            next();
-            token = JSONToken.LBRACE;
-        } else if (ch == '[') {
-            next();
-            token = JSONToken.LBRACKET;
-        } else if (ch == 'S' && charAt(bp + 1) == 'e' && charAt(bp + 2) == 't' && charAt(bp + 3) == '[') {
-            bp += 3;
-            ch = charAt(bp);
-            token = JSONToken.SET;
-        } else {
-            nextToken();
-        }
-
-        return true;
-    }
-
     
+  //读取16进制
+    @Read
+    public final void scanHex() {
+    	//必须是以x开头 否则不处理
+        if (currentCursor != 'x') {
+            throw new JSONException("illegal state. " + currentCursor);
+        }
+        next();
+/** 十六进制x紧跟着单引号 */
+/** @see com.alibaba.fastjson.serializer.SerializeWriter#writeHex(byte[]) */
+        if (currentCursor != '\'') {
+            throw new JSONException("illegal state. " + currentCursor);
+        }
 
-    public abstract int indexOf(char ch, int startIndex);
+        numberStartPos = bp;
+        /** 这里一次next, for循环也读一次next, 因为十六进制被写成2个字节的单字符 */
+        next();
 
-    public abstract String addSymbol(int offset, int len, int hash, final SymbolTable symbolTable);
+        if (currentCursor == '\'') {
+            next();
+            token = JSONToken.HEX;
+            return;
+        }
 
+        //for(;;)也可以
+        for (@SuppressWarnings("unused")int i = 0;;++i) {
+            char ch = next();
+            //读到0~9 A~F 正常，继续往下读
+            if ((ch >= '0' && ch <= '9') || (ch >= 'A' && ch <= 'F')) {
+                sbufPos++;
+                continue;
+            } else if (ch == '\'') {
+            	//如果读到单引号，结束跳出
+                sbufPos++;
+                next();
+                break;
+            } else {
+                throw new JSONException("illegal state. " + ch);
+            }
+        }
+        token = JSONToken.HEX;
+    }
+
+    //扫描数字
+    @Read(desc="注意判断科学计数法")
+    public final void scanNumber() {
+    	/** 记录当前流中token的开始位置, np指向数字字符索引 */
+        numberStartPos = bp;
+
+        //读到负号-
+        if (currentCursor == '-') {
+            sbufPos++;
+            next();
+        }
+
+        //读到0~9，继续直到不是数字跳出
+        for (;;) {
+            if (currentCursor >= '0' && currentCursor <= '9') {
+                sbufPos++;
+            } else {
+                break;
+            }
+            next();
+        }
+
+        boolean isDouble = false;
+        //如果读到.小数点，表示小数
+        if (currentCursor == '.') {
+            sbufPos++;
+            next();
+            //浮点数
+            isDouble = true;
+            //继续处理小数点后面的数字
+            for (;;) {
+                if (currentCursor >= '0' && currentCursor <= '9') {
+                    sbufPos++;
+                } else {
+                    break;
+                }
+                next();
+            }
+        }
+
+        /** 继续读取数字后面的类型 */
+        if (currentCursor == 'L') {
+            sbufPos++;
+            next();
+        } else if (currentCursor == 'S') {
+            sbufPos++;
+            next();
+        } else if (currentCursor == 'B') {
+            sbufPos++;
+            next();
+        } else if (currentCursor == 'F') {
+            sbufPos++;
+            next();
+            isDouble = true;
+        } else if (currentCursor == 'D') {
+            sbufPos++;
+            next();
+            isDouble = true;
+        } else if (currentCursor == 'e' || currentCursor == 'E') {
+        	//E是科学计数法
+            sbufPos++;
+            next();
+
+            if (currentCursor == '+' || currentCursor == '-') {
+                sbufPos++;
+                next();
+            }
+
+            for (;;) {
+                if (currentCursor >= '0' && currentCursor <= '9') {
+                    sbufPos++;
+                } else {
+                    break;
+                }
+                next();
+            }
+
+            if (currentCursor == 'D' || currentCursor == 'F') {
+                sbufPos++;
+                next();
+            }
+
+            isDouble = true;
+        }
+
+        //根据isDouble判断是小数还是整数
+        if (isDouble) {
+            token = JSONToken.LITERAL_FLOAT;
+        } else {
+            token = JSONToken.LITERAL_INT;
+        }
+    }
+    
     public String scanFieldString(char[] fieldName) {
         matchStat = UNKNOWN;
 
@@ -1243,7 +1097,7 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
 
         if (chLocal == ',') {
             bp += offset;
-            this.ch = this.charAt(bp);
+            this.currentCursor = this.charAt(bp);
             matchStat = VALUE;
             return strVal;
         }
@@ -1253,19 +1107,19 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
             if (chLocal == ',') {
                 token = JSONToken.COMMA;
                 bp += offset;
-                this.ch = this.charAt(bp);
+                this.currentCursor = this.charAt(bp);
             } else if (chLocal == ']') {
                 token = JSONToken.RBRACKET;
                 bp += offset;
-                this.ch = this.charAt(bp);
+                this.currentCursor = this.charAt(bp);
             } else if (chLocal == '}') {
                 token = JSONToken.RBRACE;
                 bp += offset;
-                this.ch = this.charAt(bp);
+                this.currentCursor = this.charAt(bp);
             } else if (chLocal == EOI) {
                 token = JSONToken.EOF;
                 bp += (offset - 1);
-                ch = EOI;
+                currentCursor = EOI;
             } else {
                 matchStat = NOT_MATCH;
                 return stringDefaultValue();
@@ -1296,7 +1150,7 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
 
             if (chLocal == expectNextChar) {
                 bp += offset;
-                this.ch = this.charAt(bp);
+                this.currentCursor = this.charAt(bp);
                 matchStat = VALUE;
                 return null;
             } else {
@@ -1354,7 +1208,7 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
         for (;;) {
             if (chLocal == expectNextChar) {
                 bp += offset;
-                this.ch = charAt(bp);
+                this.currentCursor = charAt(bp);
                 matchStat = VALUE;
                 token = JSONToken.COMMA;
                 return strVal;
@@ -1403,7 +1257,7 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
 
         if (chLocal == ',') {
             bp += offset;
-            this.ch = this.charAt(bp);
+            this.currentCursor = this.charAt(bp);
             matchStat = VALUE;
             return hash;
         }
@@ -1413,19 +1267,19 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
             if (chLocal == ',') {
                 token = JSONToken.COMMA;
                 bp += offset;
-                this.ch = this.charAt(bp);
+                this.currentCursor = this.charAt(bp);
             } else if (chLocal == ']') {
                 token = JSONToken.RBRACKET;
                 bp += offset;
-                this.ch = this.charAt(bp);
+                this.currentCursor = this.charAt(bp);
             } else if (chLocal == '}') {
                 token = JSONToken.RBRACE;
                 bp += offset;
-                this.ch = this.charAt(bp);
+                this.currentCursor = this.charAt(bp);
             } else if (chLocal == EOI) {
                 token = JSONToken.EOF;
                 bp += (offset - 1);
-                ch = EOI;
+                currentCursor = EOI;
             } else {
                 matchStat = NOT_MATCH;
                 return 0;
@@ -1474,7 +1328,7 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
 
         if (chLocal == ',') {
             bp += offset;
-            this.ch = this.charAt(bp);
+            this.currentCursor = this.charAt(bp);
             matchStat = VALUE;
             return hash;
         }
@@ -1484,19 +1338,19 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
             if (chLocal == ',') {
                 token = JSONToken.COMMA;
                 bp += offset;
-                this.ch = this.charAt(bp);
+                this.currentCursor = this.charAt(bp);
             } else if (chLocal == ']') {
                 token = JSONToken.RBRACKET;
                 bp += offset;
-                this.ch = this.charAt(bp);
+                this.currentCursor = this.charAt(bp);
             } else if (chLocal == '}') {
                 token = JSONToken.RBRACE;
                 bp += offset;
-                this.ch = this.charAt(bp);
+                this.currentCursor = this.charAt(bp);
             } else if (chLocal == EOI) {
                 token = JSONToken.EOF;
                 bp += (offset - 1);
-                ch = EOI;
+                currentCursor = EOI;
             } else {
                 matchStat = NOT_MATCH;
                 return 0;
@@ -1536,7 +1390,7 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
 
             if (chLocal == serperator) {
                 bp += offset;
-                this.ch = this.charAt(bp);
+                this.currentCursor = this.charAt(bp);
                 matchStat = VALUE;
                 return null;
             } else {
@@ -1576,7 +1430,7 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
         for (;;) {
             if (chLocal == serperator) {
                 bp += offset;
-                this.ch = this.charAt(bp);
+                this.currentCursor = this.charAt(bp);
                 matchStat = VALUE;
                 return strVal;
             } else {
@@ -1590,6 +1444,324 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
             }
         }
     }
+    
+    
+    public final Number integerValue() throws NumberFormatException {
+        long result = 0;
+        boolean negative = false;
+        if (numberStartPos == -1) {
+            numberStartPos = 0;
+        }
+        int i = numberStartPos, max = numberStartPos + sbufPos;
+        long limit;
+        long multmin;
+        int digit;
+
+        char type = ' ';
+
+        switch (charAt(max - 1)) {
+            case 'L':
+                max--;
+                type = 'L';
+                break;
+            case 'S':
+                max--;
+                type = 'S';
+                break;
+            case 'B':
+                max--;
+                type = 'B';
+                break;
+            default:
+                break;
+        }
+
+        if (charAt(numberStartPos) == '-') {
+            negative = true;
+            limit = Long.MIN_VALUE;
+            i++;
+        } else {
+            limit = -Long.MAX_VALUE;
+        }
+        multmin = MULTMIN_RADIX_TEN;
+        if (i < max) {
+            digit = charAt(i++) - '0';
+            result = -digit;
+        }
+        while (i < max) {
+            // Accumulating negatively avoids surprises near MAX_VALUE
+            digit = charAt(i++) - '0';
+            if (result < multmin) {
+                return new BigInteger(numberString());
+            }
+            result *= 10;
+            if (result < limit + digit) {
+                return new BigInteger(numberString());
+            }
+            result -= digit;
+        }
+
+        if (negative) {
+            if (i > numberStartPos + 1) {
+                if (result >= Integer.MIN_VALUE && type != 'L') {
+                    if (type == 'S') {
+                        return (short) result;
+                    }
+
+                    if (type == 'B') {
+                        return (byte) result;
+                    }
+
+                    return (int) result;
+                }
+                return result;
+            } else { /* Only got "-" */
+                throw new NumberFormatException(numberString());
+            }
+        } else {
+            result = -result;
+            if (result <= Integer.MAX_VALUE && type != 'L') {
+                if (type == 'S') {
+                    return (short) result;
+                }
+
+                if (type == 'B') {
+                    return (byte) result;
+                }
+
+                return (int) result;
+            }
+            return result;
+        }
+    }
+
+
+    public float floatValue() {
+        String strVal = numberString();
+        float floatValue = Float.parseFloat(strVal);
+        if (floatValue == 0 || floatValue == Float.POSITIVE_INFINITY) {
+            char c0 = strVal.charAt(0);
+            if (c0 > '0' && c0 <= '9') {
+                throw new JSONException("float overflow : " + strVal);
+            }
+        }
+        return floatValue;
+    }
+    public final int intValue() {
+        if (numberStartPos == -1) {
+            numberStartPos = 0;
+        }
+
+        int result = 0;
+        boolean negative = false;
+        int i = numberStartPos, max = numberStartPos + sbufPos;
+        int limit;
+        int digit;
+
+        if (charAt(numberStartPos) == '-') {
+            negative = true;
+            limit = Integer.MIN_VALUE;
+            i++;
+        } else {
+            limit = -Integer.MAX_VALUE;
+        }
+        long multmin = INT_MULTMIN_RADIX_TEN;
+        if (i < max) {
+            digit = charAt(i++) - '0';
+            result = -digit;
+        }
+        while (i < max) {
+            // Accumulating negatively avoids surprises near MAX_VALUE
+            char chLocal = charAt(i++);
+
+            if (chLocal == 'L' || chLocal == 'S' || chLocal == 'B') {
+                break;
+            }
+
+            digit = chLocal - '0';
+
+            if (result < multmin) {
+                throw new NumberFormatException(numberString());
+            }
+            result *= 10;
+            if (result < limit + digit) {
+                throw new NumberFormatException(numberString());
+            }
+            result -= digit;
+        }
+
+        if (negative) {
+            if (i > numberStartPos + 1) {
+                return result;
+            } else { /* Only got "-" */
+                throw new NumberFormatException(numberString());
+            }
+        } else {
+            return -result;
+        }
+    }
+    
+    public final long longValue() throws NumberFormatException {
+        long result = 0;
+        boolean negative = false;
+        long limit;
+        int digit;
+
+        if (numberStartPos == -1) {
+            numberStartPos = 0;
+        }
+
+        int i = numberStartPos, max = numberStartPos + sbufPos;
+
+        if (charAt(numberStartPos) == '-') {
+            negative = true;
+            limit = Long.MIN_VALUE;
+            i++;
+        } else {
+            limit = -Long.MAX_VALUE;
+        }
+        long multmin = MULTMIN_RADIX_TEN;
+        if (i < max) {
+            digit = charAt(i++) - '0';
+            result = -digit;
+        }
+        while (i < max) {
+            // Accumulating negatively avoids surprises near MAX_VALUE
+            char chLocal = charAt(i++);
+
+            if (chLocal == 'L' || chLocal == 'S' || chLocal == 'B') {
+                break;
+            }
+
+            digit = chLocal - '0';
+            if (result < multmin) {
+                throw new NumberFormatException(numberString());
+            }
+            result *= 10;
+            if (result < limit + digit) {
+                throw new NumberFormatException(numberString());
+            }
+            result -= digit;
+        }
+
+        if (negative) {
+            if (i > numberStartPos + 1) {
+                return result;
+            } else { /* Only got "-" */
+                throw new NumberFormatException(numberString());
+            }
+        } else {
+            return -result;
+        }
+    }
+
+    public final Number decimalValue(boolean decimal) {
+        char chLocal = charAt(numberStartPos + sbufPos - 1);
+        try {
+            if (chLocal == 'F') {
+                return Float.parseFloat(numberString());
+            }
+
+            if (chLocal == 'D') {
+                return Double.parseDouble(numberString());
+            }
+
+            if (decimal) {
+                return decimalValue();
+            } else {
+                return doubleValue();
+            }
+        } catch (NumberFormatException ex) {
+            throw new JSONException(ex.getMessage() + ", " + info());
+        }
+    }
+    
+    public double doubleValue() {
+        return Double.parseDouble(numberString());
+    }
+
+    
+    public void config(Feature feature, boolean state) {
+        features = Feature.config(features, feature, state);
+
+        if ((features & Feature.InitStringFieldAsEmpty.mask) != 0) {
+            stringDefaultValue = "";
+        }
+    }
+
+    public final boolean isEnabled(Feature feature) {
+        return isEnabled(feature.mask);
+    }
+
+    public final boolean isEnabled(int feature) {
+        return (this.features & feature) != 0;
+    }
+    
+
+    public final void resetStringPosition() {
+        this.sbufPos = 0;
+    }
+
+    public void close() {
+        if (sbuf.length <= 1024 * 8) {
+            SBUF_LOCAL.set(sbuf);
+        }
+        this.sbuf = null;
+    }
+
+    public final boolean isRef() {
+        if (sbufPos != 4) {
+            return false;
+        }
+
+        return charAt(numberStartPos + 1) == '$' //
+                && charAt(numberStartPos + 2) == 'r' //
+                && charAt(numberStartPos + 3) == 'e' //
+                && charAt(numberStartPos + 4) == 'f';
+    }
+
+
+   
+
+    public final boolean matchField(char[] fieldName) {
+        for (;;) {
+            if (!charArrayCompare(fieldName)) {
+                if (isWhitespace(currentCursor)) {
+                    next();
+                    continue;
+                }
+                return false;
+            } else {
+                break;
+            }
+        }
+
+        bp = bp + fieldName.length;
+        currentCursor = charAt(bp);
+
+        if (currentCursor == '{') {
+            next();
+            token = JSONToken.LBRACE;
+        } else if (currentCursor == '[') {
+            next();
+            token = JSONToken.LBRACKET;
+        } else if (currentCursor == 'S' && charAt(bp + 1) == 'e' && charAt(bp + 2) == 't' && charAt(bp + 3) == '[') {
+            bp += 3;
+            currentCursor = charAt(bp);
+            token = JSONToken.SET;
+        } else {
+            nextToken();
+        }
+
+        return true;
+    }
+
+    
+
+    public abstract int indexOf(char ch, int startIndex);
+
+    public abstract String addSymbol(int offset, int len, int hash, final SymbolTable symbolTable);
+
 
     public Collection<String> newCollectionByType(Class<?> type){
         if (type.isAssignableFrom(HashSet.class)) {
@@ -1608,7 +1780,55 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
             }
         }
     }
+    public final int scanType(String type) {
+        matchStat = UNKNOWN;
 
+        if (!charArrayCompare(typeFieldName)) {
+            return NOT_MATCH_NAME;
+        }
+
+        int bpLocal = this.bp + typeFieldName.length;
+
+        final int typeLength = type.length();
+        for (int i = 0; i < typeLength; ++i) {
+            if (type.charAt(i) != charAt(bpLocal + i)) {
+                return NOT_MATCH;
+            }
+        }
+        bpLocal += typeLength;
+        if (charAt(bpLocal) != '"') {
+            return NOT_MATCH;
+        }
+
+        this.currentCursor = charAt(++bpLocal);
+
+        if (currentCursor == ',') {
+            this.currentCursor = charAt(++bpLocal);
+            this.bp = bpLocal;
+            token = JSONToken.COMMA;
+            return VALUE;
+        } else if (currentCursor == '}') {
+            currentCursor = charAt(++bpLocal);
+            if (currentCursor == ',') {
+                token = JSONToken.COMMA;
+                this.currentCursor = charAt(++bpLocal);
+            } else if (currentCursor == ']') {
+                token = JSONToken.RBRACKET;
+                this.currentCursor = charAt(++bpLocal);
+            } else if (currentCursor == '}') {
+                token = JSONToken.RBRACE;
+                this.currentCursor = charAt(++bpLocal);
+            } else if (currentCursor == EOI) {
+                token = JSONToken.EOF;
+            } else {
+                return NOT_MATCH;
+            }
+            matchStat = END;
+        }
+
+        this.bp = bpLocal;
+        return matchStat;
+    }
 
     public Collection<String> scanFieldStringArray(char[] fieldName, Class<?> type) {
         matchStat = UNKNOWN;
@@ -1711,7 +1931,7 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
 
         if (chLocal == ',') {
             bp += offset;
-            this.ch = this.charAt(bp);
+            this.currentCursor = this.charAt(bp);
             matchStat = VALUE;
             return list;
         }
@@ -1721,19 +1941,19 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
             if (chLocal == ',') {
                 token = JSONToken.COMMA;
                 bp += offset;
-                this.ch = this.charAt(bp);
+                this.currentCursor = this.charAt(bp);
             } else if (chLocal == ']') {
                 token = JSONToken.RBRACKET;
                 bp += offset;
-                this.ch = this.charAt(bp);
+                this.currentCursor = this.charAt(bp);
             } else if (chLocal == '}') {
                 token = JSONToken.RBRACE;
                 bp += offset;
-                this.ch = this.charAt(bp);
+                this.currentCursor = this.charAt(bp);
             } else if (chLocal == EOI) {
                 bp += (offset - 1);
                 token = JSONToken.EOF;
-                this.ch = EOI;
+                this.currentCursor = EOI;
             } else {
                 matchStat = NOT_MATCH;
                 return null;
@@ -1760,7 +1980,7 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
                 && charAt(bp + offset + 3) == seperator
         ) {
             bp += 5;
-            ch = charAt(bp);
+            currentCursor = charAt(bp);
             matchStat = VALUE_NULL;
             return;
         }
@@ -1837,7 +2057,7 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
 
         if (chLocal == seperator) {
             bp += offset;
-            this.ch = this.charAt(bp);
+            this.currentCursor = this.charAt(bp);
             matchStat = VALUE;
             return;
         } else {
@@ -1892,7 +2112,7 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
 
         if (chLocal == ',') {
             bp += offset;
-            this.ch = this.charAt(bp);
+            this.currentCursor = this.charAt(bp);
             matchStat = VALUE;
             token = JSONToken.COMMA;
             return negative ? -value : value;
@@ -1903,19 +2123,19 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
             if (chLocal == ',') {
                 token = JSONToken.COMMA;
                 bp += offset;
-                this.ch = this.charAt(bp);
+                this.currentCursor = this.charAt(bp);
             } else if (chLocal == ']') {
                 token = JSONToken.RBRACKET;
                 bp += offset;
-                this.ch = this.charAt(bp);
+                this.currentCursor = this.charAt(bp);
             } else if (chLocal == '}') {
                 token = JSONToken.RBRACE;
                 bp += offset;
-                this.ch = this.charAt(bp);
+                this.currentCursor = this.charAt(bp);
             } else if (chLocal == EOI) {
                 token = JSONToken.EOF;
                 bp += (offset - 1);
-                ch = EOI;
+                currentCursor = EOI;
             } else {
                 matchStat = NOT_MATCH;
                 return 0;
@@ -2022,7 +2242,7 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
             } else if (chLocal == EOI) {
                 bp += (offset - 1);
                 token = JSONToken.EOF;
-                ch = EOI;
+                currentCursor = EOI;
             } else {
                 matchStat = NOT_MATCH;
                 return null;
@@ -2077,7 +2297,7 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
         for (;;) {
             if (chLocal == expectNext) {
                 bp += offset;
-                this.ch = this.charAt(bp);
+                this.currentCursor = this.charAt(bp);
                 matchStat = VALUE;
                 return value;
             } else {
@@ -2096,7 +2316,8 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
 
         int offset = 0;
         char chLocal = charAt(bp + (offset++));
-
+        /** 取整数第一个字符判断是否是引号 */
+        /** 如果是双引号，取第一个数字字符 */
         final boolean quote = chLocal == '"';
         if (quote) {
             chLocal = charAt(bp + (offset++));
@@ -2104,13 +2325,14 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
 
         final boolean negative = chLocal == '-';
         if (negative) {
+        	/** 如果是负数，继续取下一个字符 */
             chLocal = charAt(bp + (offset++));
         }
 
         int value;
         if (chLocal >= '0' && chLocal <= '9') {
             value = chLocal - '0';
-            for (;;) {
+            for (;;) {/** 循环将字符转换成数字 */
                 chLocal = charAt(bp + (offset++));
                 if (chLocal >= '0' && chLocal <= '9') {
                     value = value * 10 + (chLocal - '0');
@@ -2126,9 +2348,11 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
                 return 0;
             }
         } else if (chLocal == 'n' && charAt(bp + offset) == 'u' && charAt(bp + offset + 1) == 'l' && charAt(bp + offset + 2) == 'l') {
-            matchStat = VALUE_NULL;
+        	/** 匹配到null */
+        	matchStat = VALUE_NULL;
             value = 0;
             offset += 3;
+            /** 读取null后面的一个字符 */
             chLocal = charAt(bp + offset++);
 
             if (quote && chLocal == '"') {
@@ -2136,19 +2360,20 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
             }
 
             for (;;) {
+            	/** 如果读取null后面有逗号，认为结束 */
                 if (chLocal == ',') {
                     bp += offset;
-                    this.ch = charAt(bp);
+                    this.currentCursor = charAt(bp);
                     matchStat = VALUE_NULL;
                     token = JSONToken.COMMA;
                     return value;
                 } else if (chLocal == ']') {
                     bp += offset;
-                    this.ch = charAt(bp);
+                    this.currentCursor = charAt(bp);
                     matchStat = VALUE_NULL;
                     token = JSONToken.RBRACKET;
                     return value;
-                } else if (isWhitespace(chLocal)) {
+                } else if (isWhitespace(chLocal)) {/** 忽略空白字符 */
                     chLocal = charAt(bp + offset++);
                     continue;
                 }
@@ -2162,13 +2387,15 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
         }
 
         for (;;) {
+        	/** 根据期望字符用于结束匹配 */
             if (chLocal == expectNext) {
                 bp += offset;
-                this.ch = this.charAt(bp);
+                this.currentCursor = this.charAt(bp);
                 matchStat = VALUE;
                 token = JSONToken.COMMA;
                 return negative ? -value : value;
             } else {
+            	/** 忽略空白字符 */
                 if (isWhitespace(chLocal)) {
                     chLocal = charAt(bp + (offset++));
                     continue;
@@ -2233,7 +2460,7 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
         chLocal = charAt(bp + offset++);
         if (chLocal == ',') {
             bp += offset;
-            this.ch = this.charAt(bp);
+            this.currentCursor = this.charAt(bp);
             matchStat = VALUE;
             token = JSONToken.COMMA;
 
@@ -2245,19 +2472,19 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
             if (chLocal == ',') {
                 token = JSONToken.COMMA;
                 bp += offset;
-                this.ch = this.charAt(bp);
+                this.currentCursor = this.charAt(bp);
             } else if (chLocal == ']') {
                 token = JSONToken.RBRACKET;
                 bp += offset;
-                this.ch = this.charAt(bp);
+                this.currentCursor = this.charAt(bp);
             } else if (chLocal == '}') {
                 token = JSONToken.RBRACE;
                 bp += offset;
-                this.ch = this.charAt(bp);
+                this.currentCursor = this.charAt(bp);
             } else if (chLocal == EOI) {
                 token = JSONToken.EOF;
                 bp += (offset - 1);
-                ch = EOI;
+                currentCursor = EOI;
             } else {
                 matchStat = NOT_MATCH;
                 return false;
@@ -2316,7 +2543,7 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
 
         if (chLocal == ',') {
             bp += offset;
-            this.ch = this.charAt(bp);
+            this.currentCursor = this.charAt(bp);
             matchStat = VALUE;
             token = JSONToken.COMMA;
             return negative ? -value : value;
@@ -2327,19 +2554,19 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
             if (chLocal == ',') {
                 token = JSONToken.COMMA;
                 bp += offset;
-                this.ch = this.charAt(bp);
+                this.currentCursor = this.charAt(bp);
             } else if (chLocal == ']') {
                 token = JSONToken.RBRACKET;
                 bp += offset;
-                this.ch = this.charAt(bp);
+                this.currentCursor = this.charAt(bp);
             } else if (chLocal == '}') {
                 token = JSONToken.RBRACE;
                 bp += offset;
-                this.ch = this.charAt(bp);
+                this.currentCursor = this.charAt(bp);
             } else if (chLocal == EOI) {
                 token = JSONToken.EOF;
                 bp += (offset - 1);
-                ch = EOI;
+                currentCursor = EOI;
             } else {
                 matchStat = NOT_MATCH;
                 return 0;
@@ -2400,13 +2627,13 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
             for (;;) {
                 if (chLocal == ',') {
                     bp += offset;
-                    this.ch = charAt(bp);
+                    this.currentCursor = charAt(bp);
                     matchStat = VALUE_NULL;
                     token = JSONToken.COMMA;
                     return value;
                 } else if (chLocal == ']') {
                     bp += offset;
-                    this.ch = charAt(bp);
+                    this.currentCursor = charAt(bp);
                     matchStat = VALUE_NULL;
                     token = JSONToken.RBRACKET;
                     return value;
@@ -2435,7 +2662,7 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
         for (;;) {
             if (chLocal == expectNextChar) {
                 bp += offset;
-                this.ch = this.charAt(bp);
+                this.currentCursor = this.charAt(bp);
                 matchStat = VALUE;
                 token = JSONToken.COMMA;
                 return negative ? -value : value;
@@ -2560,13 +2787,13 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
             for (;;) {
                 if (chLocal == ',') {
                     bp += offset;
-                    this.ch = charAt(bp);
+                    this.currentCursor = charAt(bp);
                     matchStat = VALUE_NULL;
                     token = JSONToken.COMMA;
                     return value;
                 } else if (chLocal == '}') {
                     bp += offset;
-                    this.ch = charAt(bp);
+                    this.currentCursor = charAt(bp);
                     matchStat = VALUE_NULL;
                     token = JSONToken.RBRACE;
                     return value;
@@ -2585,7 +2812,7 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
 
         if (chLocal == ',') {
             bp += offset;
-            this.ch = this.charAt(bp);
+            this.currentCursor = this.charAt(bp);
             matchStat = VALUE;
             token = JSONToken.COMMA;
             return value;
@@ -2596,19 +2823,19 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
             if (chLocal == ',') {
                 token = JSONToken.COMMA;
                 bp += offset;
-                this.ch = this.charAt(bp);
+                this.currentCursor = this.charAt(bp);
             } else if (chLocal == ']') {
                 token = JSONToken.RBRACKET;
                 bp += offset;
-                this.ch = this.charAt(bp);
+                this.currentCursor = this.charAt(bp);
             } else if (chLocal == '}') {
                 token = JSONToken.RBRACE;
                 bp += offset;
-                this.ch = this.charAt(bp);
+                this.currentCursor = this.charAt(bp);
             } else if (chLocal == EOI) {
                 bp += (offset - 1);
                 token = JSONToken.EOF;
-                ch = EOI;
+                currentCursor = EOI;
             } else {
                 matchStat = NOT_MATCH;
                 return 0;
@@ -2740,13 +2967,13 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
             for (;;) {
                 if (chLocal == ',') {
                     bp += offset;
-                    this.ch = charAt(bp);
+                    this.currentCursor = charAt(bp);
                     matchStat = VALUE_NULL;
                     token = JSONToken.COMMA;
                     return value;
                 } else if (chLocal == ']') {
                     bp += offset;
-                    this.ch = charAt(bp);
+                    this.currentCursor = charAt(bp);
                     matchStat = VALUE_NULL;
                     token = JSONToken.RBRACKET;
                     return value;
@@ -2765,7 +2992,7 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
 
         if (chLocal == seperator) {
             bp += offset;
-            this.ch = this.charAt(bp);
+            this.currentCursor = this.charAt(bp);
             matchStat = VALUE;
             token = JSONToken.COMMA;
             return value;
@@ -2878,13 +3105,13 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
             for (;;) {
                 if (chLocal == ',') {
                     bp += offset;
-                    this.ch = charAt(bp);
+                    this.currentCursor = charAt(bp);
                     matchStat = VALUE_NULL;
                     token = JSONToken.COMMA;
                     return value;
                 } else if (chLocal == ']') {
                     bp += offset;
-                    this.ch = charAt(bp);
+                    this.currentCursor = charAt(bp);
                     matchStat = VALUE_NULL;
                     token = JSONToken.RBRACKET;
                     return value;
@@ -2903,7 +3130,7 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
 
         if (chLocal == seperator) {
             bp += offset;
-            this.ch = this.charAt(bp);
+            this.currentCursor = this.charAt(bp);
             matchStat = VALUE;
             token = JSONToken.COMMA;
             return value;
@@ -3002,13 +3229,13 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
             for (;;) {
                 if (chLocal == ',') {
                     bp += offset;
-                    this.ch = charAt(bp);
+                    this.currentCursor = charAt(bp);
                     matchStat = VALUE_NULL;
                     token = JSONToken.COMMA;
                     return value;
                 } else if (chLocal == '}') {
                     bp += offset;
-                    this.ch = charAt(bp);
+                    this.currentCursor = charAt(bp);
                     matchStat = VALUE_NULL;
                     token = JSONToken.RBRACE;
                     return value;
@@ -3027,7 +3254,7 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
 
         if (chLocal == ',') {
             bp += offset;
-            this.ch = this.charAt(bp);
+            this.currentCursor = this.charAt(bp);
             matchStat = VALUE;
             token = JSONToken.COMMA;
             return value;
@@ -3038,19 +3265,19 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
             if (chLocal == ',') {
                 token = JSONToken.COMMA;
                 bp += offset;
-                this.ch = this.charAt(bp);
+                this.currentCursor = this.charAt(bp);
             } else if (chLocal == ']') {
                 token = JSONToken.RBRACKET;
                 bp += offset;
-                this.ch = this.charAt(bp);
+                this.currentCursor = this.charAt(bp);
             } else if (chLocal == '}') {
                 token = JSONToken.RBRACE;
                 bp += offset;
-                this.ch = this.charAt(bp);
+                this.currentCursor = this.charAt(bp);
             } else if (chLocal == EOI) {
                 token = JSONToken.EOF;
                 bp += (offset - 1);
-                ch = EOI;
+                currentCursor = EOI;
             } else {
                 matchStat = NOT_MATCH;
                 return null;
@@ -3206,7 +3433,7 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
             } else if (chLocal == EOI) {
                 bp += (offset - 1);
                 token = JSONToken.EOF;
-                ch = EOI;
+                currentCursor = EOI;
             } else {
                 matchStat = NOT_MATCH;
                 return null;
@@ -3394,7 +3621,7 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
             } else if (chLocal == EOI) {
                 bp += (offset - 1);
                 token = JSONToken.EOF;
-                ch = EOI;
+                currentCursor = EOI;
             } else {
                 matchStat = NOT_MATCH;
                 return null;
@@ -3520,13 +3747,13 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
             for (;;) {
                 if (chLocal == ',') {
                     bp += offset;
-                    this.ch = charAt(bp);
+                    this.currentCursor = charAt(bp);
                     matchStat = VALUE_NULL;
                     token = JSONToken.COMMA;
                     return value;
                 } else if (chLocal == '}') {
                     bp += offset;
-                    this.ch = charAt(bp);
+                    this.currentCursor = charAt(bp);
                     matchStat = VALUE_NULL;
                     token = JSONToken.RBRACE;
                     return value;
@@ -3545,7 +3772,7 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
 
         if (chLocal == ',') {
             bp += offset;
-            this.ch = this.charAt(bp);
+            this.currentCursor = this.charAt(bp);
             matchStat = VALUE;
             token = JSONToken.COMMA;
             return value;
@@ -3556,19 +3783,19 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
             if (chLocal == ',') {
                 token = JSONToken.COMMA;
                 bp += offset;
-                this.ch = this.charAt(bp);
+                this.currentCursor = this.charAt(bp);
             } else if (chLocal == ']') {
                 token = JSONToken.RBRACKET;
                 bp += offset;
-                this.ch = this.charAt(bp);
+                this.currentCursor = this.charAt(bp);
             } else if (chLocal == '}') {
                 token = JSONToken.RBRACE;
                 bp += offset;
-                this.ch = this.charAt(bp);
+                this.currentCursor = this.charAt(bp);
             } else if (chLocal == EOI) {
                 token = JSONToken.EOF;
                 bp += (offset - 1);
-                ch = EOI;
+                currentCursor = EOI;
             } else {
                 matchStat = NOT_MATCH;
                 return 0;
@@ -3679,13 +3906,13 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
             for (;;) {
                 if (chLocal == ',') {
                     bp += offset;
-                    this.ch = charAt(bp);
+                    this.currentCursor = charAt(bp);
                     matchStat = VALUE_NULL;
                     token = JSONToken.COMMA;
                     return value;
                 } else if (chLocal == '}') {
                     bp += offset;
-                    this.ch = charAt(bp);
+                    this.currentCursor = charAt(bp);
                     matchStat = VALUE_NULL;
                     token = JSONToken.RBRACE;
                     return value;
@@ -3704,7 +3931,7 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
 
         if (chLocal == ',') {
             bp += offset;
-            this.ch = this.charAt(bp);
+            this.currentCursor = this.charAt(bp);
             matchStat = VALUE;
             token = JSONToken.COMMA;
             return value;
@@ -3715,19 +3942,19 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
             if (chLocal == ',') {
                 token = JSONToken.COMMA;
                 bp += offset;
-                this.ch = this.charAt(bp);
+                this.currentCursor = this.charAt(bp);
             } else if (chLocal == ']') {
                 token = JSONToken.RBRACKET;
                 bp += offset;
-                this.ch = this.charAt(bp);
+                this.currentCursor = this.charAt(bp);
             } else if (chLocal == '}') {
                 token = JSONToken.RBRACE;
                 bp += offset;
-                this.ch = this.charAt(bp);
+                this.currentCursor = this.charAt(bp);
             } else if (chLocal == EOI) {
                 token = JSONToken.EOF;
                 bp += (offset - 1);
-                ch = EOI;
+                currentCursor = EOI;
             } else {
                 matchStat = NOT_MATCH;
                 return null;
@@ -3821,13 +4048,13 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
             for (;;) {
                 if (chLocal == ',') {
                     bp += offset;
-                    this.ch = charAt(bp);
+                    this.currentCursor = charAt(bp);
                     matchStat = VALUE_NULL;
                     token = JSONToken.COMMA;
                     return value;
                 } else if (chLocal == '}') {
                     bp += offset;
-                    this.ch = charAt(bp);
+                    this.currentCursor = charAt(bp);
                     matchStat = VALUE_NULL;
                     token = JSONToken.RBRACE;
                     return value;
@@ -3846,7 +4073,7 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
 
         if (chLocal == ',') {
             bp += offset;
-            this.ch = this.charAt(bp);
+            this.currentCursor = this.charAt(bp);
             matchStat = VALUE;
             token = JSONToken.COMMA;
             return value;
@@ -3857,19 +4084,19 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
             if (chLocal == ',') {
                 token = JSONToken.COMMA;
                 bp += offset;
-                this.ch = this.charAt(bp);
+                this.currentCursor = this.charAt(bp);
             } else if (chLocal == ']') {
                 token = JSONToken.RBRACKET;
                 bp += offset;
-                this.ch = this.charAt(bp);
+                this.currentCursor = this.charAt(bp);
             } else if (chLocal == '}') {
                 token = JSONToken.RBRACE;
                 bp += offset;
-                this.ch = this.charAt(bp);
+                this.currentCursor = this.charAt(bp);
             } else if (chLocal == EOI) {
                 token = JSONToken.EOF;
                 bp += (offset - 1);
-                ch = EOI;
+                currentCursor = EOI;
             } else {
                 matchStat = NOT_MATCH;
                 return null;
@@ -3981,7 +4208,7 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
 
         if (chLocal == ',') {
             bp += offset;
-            this.ch = this.charAt(bp);
+            this.currentCursor = this.charAt(bp);
             matchStat = VALUE;
             return dateVal;
         }
@@ -3991,19 +4218,19 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
             if (chLocal == ',') {
                 token = JSONToken.COMMA;
                 bp += offset;
-                this.ch = this.charAt(bp);
+                this.currentCursor = this.charAt(bp);
             } else if (chLocal == ']') {
                 token = JSONToken.RBRACKET;
                 bp += offset;
-                this.ch = this.charAt(bp);
+                this.currentCursor = this.charAt(bp);
             } else if (chLocal == '}') {
                 token = JSONToken.RBRACE;
                 bp += offset;
-                this.ch = this.charAt(bp);
+                this.currentCursor = this.charAt(bp);
             } else if (chLocal == EOI) {
                 token = JSONToken.EOF;
                 bp += (offset - 1);
-                ch = EOI;
+                currentCursor = EOI;
             } else {
                 matchStat = NOT_MATCH;
                 return null;
@@ -4116,7 +4343,7 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
 
         if (chLocal == ',') {
             bp += offset;
-            this.ch = this.charAt(bp);
+            this.currentCursor = this.charAt(bp);
             matchStat = VALUE;
             token = JSONToken.COMMA;
             return dateVal;
@@ -4127,19 +4354,19 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
             if (chLocal == ',') {
                 token = JSONToken.COMMA;
                 bp += offset;
-                this.ch = this.charAt(bp);
+                this.currentCursor = this.charAt(bp);
             } else if (chLocal == ']') {
                 token = JSONToken.RBRACKET;
                 bp += offset;
-                this.ch = this.charAt(bp);
+                this.currentCursor = this.charAt(bp);
             } else if (chLocal == '}') {
                 token = JSONToken.RBRACE;
                 bp += offset;
-                this.ch = this.charAt(bp);
+                this.currentCursor = this.charAt(bp);
             } else if (chLocal == EOI) {
                 token = JSONToken.EOF;
                 bp += (offset - 1);
-                ch = EOI;
+                currentCursor = EOI;
             } else {
                 matchStat = NOT_MATCH;
                 return null;
@@ -4325,7 +4552,7 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
 
         if (chLocal == ',') {
             bp += offset;
-            this.ch = this.charAt(bp);
+            this.currentCursor = this.charAt(bp);
             matchStat = VALUE;
             return uuid;
         }
@@ -4335,19 +4562,19 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
             if (chLocal == ',') {
                 token = JSONToken.COMMA;
                 bp += offset;
-                this.ch = this.charAt(bp);
+                this.currentCursor = this.charAt(bp);
             } else if (chLocal == ']') {
                 token = JSONToken.RBRACKET;
                 bp += offset;
-                this.ch = this.charAt(bp);
+                this.currentCursor = this.charAt(bp);
             } else if (chLocal == '}') {
                 token = JSONToken.RBRACE;
                 bp += offset;
-                this.ch = this.charAt(bp);
+                this.currentCursor = this.charAt(bp);
             } else if (chLocal == EOI) {
                 token = JSONToken.EOF;
                 bp += (offset - 1);
-                ch = EOI;
+                currentCursor = EOI;
             } else {
                 matchStat = NOT_MATCH;
                 return null;
@@ -4528,7 +4755,7 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
 
         if (chLocal == ',') {
             bp += offset;
-            this.ch = this.charAt(bp);
+            this.currentCursor = this.charAt(bp);
             matchStat = VALUE;
             return uuid;
         }
@@ -4538,19 +4765,19 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
             if (chLocal == ',') {
                 token = JSONToken.COMMA;
                 bp += offset;
-                this.ch = this.charAt(bp);
+                this.currentCursor = this.charAt(bp);
             } else if (chLocal == ']') {
                 token = JSONToken.RBRACKET;
                 bp += offset;
-                this.ch = this.charAt(bp);
+                this.currentCursor = this.charAt(bp);
             } else if (chLocal == '}') {
                 token = JSONToken.RBRACE;
                 bp += offset;
-                this.ch = this.charAt(bp);
+                this.currentCursor = this.charAt(bp);
             } else if (chLocal == EOI) {
                 token = JSONToken.EOF;
                 bp += (offset - 1);
-                ch = EOI;
+                currentCursor = EOI;
             } else {
                 matchStat = NOT_MATCH;
                 return null;
@@ -4564,78 +4791,41 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
         return uuid;
     }
 
-    public final void scanTrue() {
-        if (ch != 't') {
-            throw new JSONException("error parse true");
-        }
-        next();
-
-        if (ch != 'r') {
-            throw new JSONException("error parse true");
-        }
-        next();
-
-        if (ch != 'u') {
-            throw new JSONException("error parse true");
-        }
-        next();
-
-        if (ch != 'e') {
-            throw new JSONException("error parse true");
-        }
-        next();
-
-        if (ch == ' '  ||
-            ch == ','  ||
-            ch == '}'  ||
-            ch == ']'  ||
-            ch == '\n' ||
-            ch == '\r' ||
-            ch == '\t' ||
-            ch == EOI  ||
-            ch == '\f' ||
-            ch == '\b' ||
-            ch == ':'  ||
-            ch == '/') {
-            token = JSONToken.TRUE;
-        } else {
-            throw new JSONException("scan true error");
-        }
-    }
-
+    
     public final void scanNullOrNew() {
         scanNullOrNew(true);
     }
+    @Read(desc="跟true false做法是一样的")
     public final void scanNullOrNew(boolean acceptColon) {
-        if (ch != 'n') {
+        if (currentCursor != 'n') {
             throw new JSONException("error parse null or new");
         }
         next();
 
-        if (ch == 'u') {
+        if (currentCursor == 'u') {
             next();
-            if (ch != 'l') {
+            if (currentCursor != 'l') {
                 throw new JSONException("error parse null");
             }
             next();
 
-            if (ch != 'l') {
+            if (currentCursor != 'l') {
                 throw new JSONException("error parse null");
             }
             next();
 
 
-            if (ch == ' '
-                    || ch == ','
-                    || ch == '}'
-                    || ch == ']'
-                    || ch == '\n'
-                    || ch == '\r'
-                    || ch == '\t'
-                    || ch == EOI
-                    || (ch == ':' && acceptColon)
-                    || ch == '\f'
-                    || ch == '\b') {
+            if (currentCursor == ' '
+                    || currentCursor == ','
+                    || currentCursor == '}'
+                    || currentCursor == ']'
+                    || currentCursor == '\n'
+                    || currentCursor == '\r'
+                    || currentCursor == '\t'
+                    || currentCursor == EOI
+                    || (currentCursor == ':' && acceptColon)
+                    || currentCursor == '\f'
+                    || currentCursor == '\b') {
 
                 token = JSONToken.NULL;
             } else {
@@ -4644,90 +4834,136 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
             return;
         }
 
-        if (ch != 'e') {
+        if (currentCursor != 'e') {
             throw new JSONException("error parse new");
         }
         next();
 
-        if (ch != 'w') {
+        if (currentCursor != 'w') {
             throw new JSONException("error parse new");
         }
         next();
 
-        if (ch == ' '  ||
-            ch == ','  ||
-            ch == '}'  ||
-            ch == ']'  ||
-            ch == '\n' ||
-            ch == '\r' ||
-            ch == '\t' ||
-            ch == EOI  ||
-            ch == '\f' ||
-            ch == '\b') {
+        if (currentCursor == ' '  ||
+            currentCursor == ','  ||
+            currentCursor == '}'  ||
+            currentCursor == ']'  ||
+            currentCursor == '\n' ||
+            currentCursor == '\r' ||
+            currentCursor == '\t' ||
+            currentCursor == EOI  ||
+            currentCursor == '\f' ||
+            currentCursor == '\b') {
             token = JSONToken.NEW;
         } else {
             throw new JSONException("scan new error");
         }
     }
+    
+    @Read
+    public final void scanTrue() {
+    	//一个个往下读，只要不是true，就异常
+        if (currentCursor != 't') {
+            throw new JSONException("error parse true");
+        }
+        next();
 
+        if (currentCursor != 'r') {
+            throw new JSONException("error parse true");
+        }
+        next();
+
+        if (currentCursor != 'u') {
+            throw new JSONException("error parse true");
+        }
+        next();
+
+        if (currentCursor != 'e') {
+            throw new JSONException("error parse true");
+        }
+        next();
+
+        //往下读，true后面必须是这些结束符中的一个
+        if (currentCursor == ' '  ||
+            currentCursor == ','  ||
+            currentCursor == '}'  ||
+            currentCursor == ']'  ||
+            currentCursor == '\n' ||
+            currentCursor == '\r' ||
+            currentCursor == '\t' ||
+            currentCursor == EOI  ||
+            currentCursor == '\f' ||
+            currentCursor == '\b' ||
+            currentCursor == ':'  ||
+            currentCursor == '/') {
+            token = JSONToken.TRUE;
+        } else {
+            throw new JSONException("scan true error");
+        }
+    }
+    
+    @Read(desc="跟true一样，是配对的 这两个方法可以合并吗")
     public final void scanFalse() {
-        if (ch != 'f') {
+        if (currentCursor != 'f') {
             throw new JSONException("error parse false");
         }
         next();
 
-        if (ch != 'a') {
+        if (currentCursor != 'a') {
             throw new JSONException("error parse false");
         }
         next();
 
-        if (ch != 'l') {
+        if (currentCursor != 'l') {
             throw new JSONException("error parse false");
         }
         next();
 
-        if (ch != 's') {
+        if (currentCursor != 's') {
             throw new JSONException("error parse false");
         }
         next();
 
-        if (ch != 'e') {
+        if (currentCursor != 'e') {
             throw new JSONException("error parse false");
         }
         next();
 
-        if (ch == ' '  ||
-            ch == ','  ||
-            ch == '}'  ||
-            ch == ']'  ||
-            ch == '\n' ||
-            ch == '\r' ||
-            ch == '\t' ||
-            ch == EOI  ||
-            ch == '\f' ||
-            ch == '\b' ||
-            ch == ':'  ||
-            ch == '/') {
+        if (currentCursor == ' '  ||
+            currentCursor == ','  ||
+            currentCursor == '}'  ||
+            currentCursor == ']'  ||
+            currentCursor == '\n' ||
+            currentCursor == '\r' ||
+            currentCursor == '\t' ||
+            currentCursor == EOI  ||
+            currentCursor == '\f' ||
+            currentCursor == '\b' ||
+            currentCursor == ':'  ||
+            currentCursor == '/') {
             token = JSONToken.FALSE;
         } else {
             throw new JSONException("scan false error");
         }
     }
 
+    @Read(desc="扫描标识符  就是关键字")
     public final void scanIdent() {
-        np = bp - 1;
+        numberStartPos = bp - 1;
         hasSpecial = false;
 
         for (;;) {
-            sp++;
+            sbufPos++;
 
             next();
-            if (Character.isLetterOrDigit(ch)) {
+            //是字母或者数字，跳过继续
+            if (Character.isLetterOrDigit(currentCursor)) {
                 continue;
             }
 
+            //这里stringVal是抽象方法，如何拿到标识符
             String ident = stringVal();
-
+            //直接判断标志符是不是这些关键字中的一个，是直接返回对应的代码
             if ("null".equalsIgnoreCase(ident)) {
                 token = JSONToken.NULL;
             } else if ("new".equals(ident)) {
@@ -4853,19 +5089,19 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
         return true;
     }
 
-    //跳过空格
+    //跳过空格  为啥要跳过注释
     public final void skipWhitespace() {
         for (;;) {
-            if (ch <= '/') {
-                if (ch == ' '  ||
-                    ch == '\r' ||
-                    ch == '\n' ||
-                    ch == '\t' ||
-                    ch == '\f' ||
-                    ch == '\b') {
+            if (currentCursor <= '/') {
+                if (currentCursor == ' '  ||
+                    currentCursor == '\r' ||
+                    currentCursor == '\n' ||
+                    currentCursor == '\t' ||
+                    currentCursor == '\f' ||
+                    currentCursor == '\b') {
                     next();
                     continue;
-                } else if (ch == '/') {
+                } else if (currentCursor == '/') {
                     skipComment();
                     continue;
                 } else {
@@ -4876,213 +5112,10 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
             }
         }
     }
-
-    //读取16进制
-    public final void scanHex() {
-    	//必须是以x'结尾 否则不处理
-        if (ch != 'x') {
-            throw new JSONException("illegal state. " + ch);
-        }
-        next();
-        if (ch != '\'') {
-            throw new JSONException("illegal state. " + ch);
-        }
-
-        np = bp;
-        next();
-
-        if (ch == '\'') {
-            next();
-            token = JSONToken.HEX;
-            return;
-        }
-
-        //for(;;)也可以
-        for (@SuppressWarnings("unused")
-		int i = 0;;++i) {
-            char ch = next();
-            //读到0~9 A~F 正常，继续往下读
-            if ((ch >= '0' && ch <= '9') || (ch >= 'A' && ch <= 'F')) {
-                sp++;
-                continue;
-            } else if (ch == '\'') {
-            	//如果读到单引号，结束跳出
-                sp++;
-                next();
-                break;
-            } else {
-                throw new JSONException("illegal state. " + ch);
-            }
-        }
-        token = JSONToken.HEX;
-    }
-
-    //扫描数字
-    public final void scanNumber() {
-        np = bp;
-
-        if (ch == '-') {
-            sp++;
-            next();
-        }
-
-        //读到0~9，继续
-        for (;;) {
-            if (ch >= '0' && ch <= '9') {
-                sp++;
-            } else {
-                break;
-            }
-            next();
-        }
-
-        boolean isDouble = false;
-
-        //如果读到.小数点，表示小数
-        if (ch == '.') {
-            sp++;
-            next();
-            isDouble = true;
-
-            for (;;) {
-                if (ch >= '0' && ch <= '9') {
-                    sp++;
-                } else {
-                    break;
-                }
-                next();
-            }
-        }
-
-        if (ch == 'L') {
-            sp++;
-            next();
-        } else if (ch == 'S') {
-            sp++;
-            next();
-        } else if (ch == 'B') {
-            sp++;
-            next();
-        } else if (ch == 'F') {
-            sp++;
-            next();
-            isDouble = true;
-        } else if (ch == 'D') {
-            sp++;
-            next();
-            isDouble = true;
-        } else if (ch == 'e' || ch == 'E') {
-            sp++;
-            next();
-
-            if (ch == '+' || ch == '-') {
-                sp++;
-                next();
-            }
-
-            for (;;) {
-                if (ch >= '0' && ch <= '9') {
-                    sp++;
-                } else {
-                    break;
-                }
-                next();
-            }
-
-            if (ch == 'D' || ch == 'F') {
-                sp++;
-                next();
-            }
-
-            isDouble = true;
-        }
-
-        //根据isDouble判断是小数还是整数
-        if (isDouble) {
-            token = JSONToken.LITERAL_FLOAT;
-        } else {
-            token = JSONToken.LITERAL_INT;
-        }
-    }
-
-    public final long longValue() throws NumberFormatException {
-        long result = 0;
-        boolean negative = false;
-        long limit;
-        int digit;
-
-        if (np == -1) {
-            np = 0;
-        }
-
-        int i = np, max = np + sp;
-
-        if (charAt(np) == '-') {
-            negative = true;
-            limit = Long.MIN_VALUE;
-            i++;
-        } else {
-            limit = -Long.MAX_VALUE;
-        }
-        long multmin = MULTMIN_RADIX_TEN;
-        if (i < max) {
-            digit = charAt(i++) - '0';
-            result = -digit;
-        }
-        while (i < max) {
-            // Accumulating negatively avoids surprises near MAX_VALUE
-            char chLocal = charAt(i++);
-
-            if (chLocal == 'L' || chLocal == 'S' || chLocal == 'B') {
-                break;
-            }
-
-            digit = chLocal - '0';
-            if (result < multmin) {
-                throw new NumberFormatException(numberString());
-            }
-            result *= 10;
-            if (result < limit + digit) {
-                throw new NumberFormatException(numberString());
-            }
-            result -= digit;
-        }
-
-        if (negative) {
-            if (i > np + 1) {
-                return result;
-            } else { /* Only got "-" */
-                throw new NumberFormatException(numberString());
-            }
-        } else {
-            return -result;
-        }
-    }
-
-    public final Number decimalValue(boolean decimal) {
-        char chLocal = charAt(np + sp - 1);
-        try {
-            if (chLocal == 'F') {
-                return Float.parseFloat(numberString());
-            }
-
-            if (chLocal == 'D') {
-                return Double.parseDouble(numberString());
-            }
-
-            if (decimal) {
-                return decimalValue();
-            } else {
-                return doubleValue();
-            }
-        } catch (NumberFormatException ex) {
-            throw new JSONException(ex.getMessage() + ", " + info());
-        }
-    }
-
     
+    @Read
     public static boolean isWhitespace(char ch) {
-        // 专门调整了判断顺序
+        // 专门调整了判断顺序   是按照出现的频率高低？
         return ch <= ' '  &&
               (ch == ' '  ||
                ch == '\n' ||
@@ -5092,7 +5125,6 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
                ch == '\b');
     }
 
-    
     //跳过注释
     @Read
     protected void skipComment() {
@@ -5105,26 +5137,26 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
     	 */	
         next();
         /** 如果下一个字符还是左反斜杠/ */
-        if (ch == '/') {
+        if (currentCursor == '/') {
             for (;;) {
                 next();
                 /** 如果遇到换行符，继续读取下一个字符并返回 */
-                if (ch == '\n') {
+                if (currentCursor == '\n') {
                     next();
                     return;//return到for  这个地方会不会多执行了一次next?
-                } else if (ch == EOI) {
+                } else if (currentCursor == EOI) {
                 	/** 如果已经遇到流结束，返回 */
                     return;
                 }
             }
-        } else if (ch == '*') {
+        } else if (currentCursor == '*') {
             next();
             //遇到*继续往下读，读到/结束
-            for (; ch != EOI;) {
+            for (; currentCursor != EOI;) {
             	//如果遇到*,继续尝试读取下一个字符，看看是否是/   
-                if (ch == '*') {
+                if (currentCursor == '*') {
                     next();
-                    if (ch == '/') {
+                    if (currentCursor == '/') {
                     	// 如果确实是/字符，提前预读下一个有效字符后终止 
                         next();
                         return;
@@ -5141,26 +5173,23 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
     }
     /**
      * Append a character ch to sbuf.
-     * 在缓冲区sbuf末尾加上ch
+     * 将ch放到缓冲区sbuf末尾
      */
     @Read
     protected final void putChar(char ch) {
     	//如果缓冲区数组已经满了，扩容为2倍
-        if (sp == sbuf.length) {
+        if (sbufPos == sbuf.length) {
             char[] newsbuf = new char[sbuf.length * 2];
             System.arraycopy(sbuf, 0, newsbuf, 0, sbuf.length);
             sbuf = newsbuf;
         }
-        sbuf[sp++] = ch;
+        sbuf[sbufPos++] = ch;
     }
     
-    //当前错误信息赋给token，当前存储的字符类型为信息错误 ，可以去掉参数
-    protected void lexError(String key, Object... args) {
-        token = ERROR;
-    }
+
     //扫描单引号  返回值为空
     private void scanStringSingleQuote() {
-        np = bp;
+        numberStartPos = bp;
         hasSpecial = false;
         char chLocal;
         for (;;) {
@@ -5184,14 +5213,14 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
                 	//特殊字符
                     hasSpecial = true;
 
-                    if (sp > sbuf.length) {
-                        char[] newsbuf = new char[sp * 2];
+                    if (sbufPos > sbuf.length) {
+                        char[] newsbuf = new char[sbufPos * 2];
                         System.arraycopy(sbuf, 0, newsbuf, 0, sbuf.length);
                         sbuf = newsbuf;
                     }
 
                     // text.getChars(offset, offset + count, dest, 0);
-                    this.copyTo(np + 1, sp, sbuf);
+                    this.copyTo(numberStartPos + 1, sbufPos, sbuf);
                     // System.arraycopy(buf, np + 1, sbuf, 0, sp);
                 }
 
@@ -5273,21 +5302,21 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
                         putChar((char) Integer.parseInt(new String(new char[] { next(), next(), next(), next() }), 16));
                         break;
                     default:
-                        this.ch = chLocal;
+                        this.currentCursor = chLocal;
                         throw new JSONException("unclosed single-quote string");
                 }
                 continue;
             }
 
             if (!hasSpecial) {
-                sp++;
+                sbufPos++;
                 continue;
             }
 
-            if (sp == sbuf.length) {
+            if (sbufPos == sbuf.length) {
                 putChar(chLocal);
             } else {
-                sbuf[sp++] = chLocal;
+                sbuf[sbufPos++] = chLocal;
             }
         }
 
@@ -5295,11 +5324,6 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
         this.next();
     }
     
-    /*******get set方法************/
-    //拿到当前字符
-    public final char getCurrent() {
-        return ch;
-    }
     
     /*******抽象方法************/
     public abstract String numberString();
@@ -5307,6 +5331,11 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
     public abstract boolean isEOF();
     public abstract byte[] bytesValue();
     public abstract BigDecimal decimalValue();
+    /**
+     * 这里提供的stringVal()需要由子类实现，原因：
+     * 在android6.0和jdk6版本 获取子字符串会共享外层String的char[] 
+     * 会导致String占用内存无法释放（特别是打文本字符串）。
+     */
     public abstract String stringVal();
     public abstract String subString(int offset, int count);
     public abstract char charAt(int index);
@@ -5320,10 +5349,46 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
 
     
     /********不重要的方法***************/
+    //根据类型转成名字
+    @Read
+    public final String tokenName() {
+        return JSONToken.name(token);
+    }
+    //当前类型为error ，可以去掉参数
+//    protected void lexError(String key, Object... args) {
+//        token = ERROR;
+//    }
+    public String info() {
+        return "";
+    }
+    /*******get set方法************/
+    //拿到当前字符
+    public final char getCurrent() {
+        return currentCursor;
+    }
     /**
      * internal method, don't invoke
      * @param token
      */
+    public Calendar getCalendar() {
+        return this.calendar;
+    }
+
+    public TimeZone getTimeZone() {
+        return timeZone;
+    }
+
+    public void setTimeZone(TimeZone timeZone) {
+        this.timeZone = timeZone;
+    }
+
+    public Locale getLocale() {
+        return locale;
+    }
+
+    public void setLocale(Locale locale) {
+        this.locale = locale;
+    }
     public void setToken(int token) {
         this.token = token;
     }
@@ -5399,4 +5464,18 @@ public abstract class JSONLexerBase implements JSONLexer, Closeable {
     public boolean matchField2(char[] fieldName) {
         throw new UnsupportedOperationException();
     }
+    
+    /*****************不重要的************************/
+    //未用到
+    public final boolean isEnabled(int features, int feature) {
+        return (this.features & feature) != 0 || (features & feature) != 0;
+    }
+
+    // public final char next() {
+    // ch = doNext();
+    //// if (ch == '/' && (this.features & Feature.AllowComment.mask) != 0) {
+    //// skipComment();
+    //// }
+    // return ch;
+    // }
 }

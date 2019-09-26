@@ -825,7 +825,7 @@ public class JSONScannerTest {
     objectUnderTest.hasSpecial = false;
     objectUnderTest.token = 0;
     objectUnderTest.locale = null;
-    objectUnderTest.np = 0;
+    objectUnderTest.numberStartPos = 0;
     objectUnderTest.features = 0;
     Reflector.setField(objectUnderTest, "text", "");
     objectUnderTest.calendar = null;
@@ -834,9 +834,9 @@ public class JSONScannerTest {
     Reflector.setField(objectUnderTest, "len", 0);
     objectUnderTest.stringDefaultValue = "";
     objectUnderTest.pos = 0;
-    objectUnderTest.sp = 0;
+    objectUnderTest.sbufPos = 0;
     objectUnderTest.sbuf = null;
-    objectUnderTest.ch = '\u0000';
+    objectUnderTest.currentCursor = '\u0000';
     objectUnderTest.timeZone = null;
     objectUnderTest.eofPos = 0;
     char h0 = '\u0000';
@@ -874,7 +874,7 @@ public class JSONScannerTest {
     objectUnderTest.hasSpecial = false;
     objectUnderTest.token = 0;
     objectUnderTest.locale = null;
-    objectUnderTest.np = 0;
+    objectUnderTest.numberStartPos = 0;
     objectUnderTest.features = 0;
     Reflector.setField(objectUnderTest, "text", "");
     objectUnderTest.calendar = null;
@@ -883,9 +883,9 @@ public class JSONScannerTest {
     Reflector.setField(objectUnderTest, "len", 0);
     objectUnderTest.stringDefaultValue = "";
     objectUnderTest.pos = 0;
-    objectUnderTest.sp = 0;
+    objectUnderTest.sbufPos = 0;
     objectUnderTest.sbuf = null;
-    objectUnderTest.ch = '\u0000';
+    objectUnderTest.currentCursor = '\u0000';
     objectUnderTest.timeZone = null;
     objectUnderTest.eofPos = 0;
     char h0 = '2';
@@ -922,7 +922,7 @@ public class JSONScannerTest {
     objectUnderTest.hasSpecial = false;
     objectUnderTest.token = 0;
     objectUnderTest.locale = null;
-    objectUnderTest.np = 0;
+    objectUnderTest.numberStartPos = 0;
     objectUnderTest.features = 0;
     Reflector.setField(objectUnderTest, "text", "");
     objectUnderTest.calendar = null;
@@ -931,9 +931,9 @@ public class JSONScannerTest {
     Reflector.setField(objectUnderTest, "len", 0);
     objectUnderTest.stringDefaultValue = "";
     objectUnderTest.pos = 0;
-    objectUnderTest.sp = 0;
+    objectUnderTest.sbufPos = 0;
     objectUnderTest.sbuf = null;
-    objectUnderTest.ch = '\u0000';
+    objectUnderTest.currentCursor = '\u0000';
     objectUnderTest.timeZone = null;
     objectUnderTest.eofPos = 0;
     char h0 = '0';
@@ -969,7 +969,7 @@ public class JSONScannerTest {
     objectUnderTest.hasSpecial = false;
     objectUnderTest.token = 0;
     objectUnderTest.locale = null;
-    objectUnderTest.np = 0;
+    objectUnderTest.numberStartPos = 0;
     objectUnderTest.features = 0;
     Reflector.setField(objectUnderTest, "text", "");
     objectUnderTest.calendar = null;
@@ -978,9 +978,9 @@ public class JSONScannerTest {
     Reflector.setField(objectUnderTest, "len", 0);
     objectUnderTest.stringDefaultValue = "";
     objectUnderTest.pos = 0;
-    objectUnderTest.sp = 0;
+    objectUnderTest.sbufPos = 0;
     objectUnderTest.sbuf = null;
-    objectUnderTest.ch = '\u0000';
+    objectUnderTest.currentCursor = '\u0000';
     objectUnderTest.timeZone = null;
     objectUnderTest.eofPos = 0;
     char h0 = '0';
@@ -1019,7 +1019,7 @@ public class JSONScannerTest {
     objectUnderTest.hasSpecial = false;
     objectUnderTest.token = 0;
     objectUnderTest.locale = null;
-    objectUnderTest.np = 0;
+    objectUnderTest.numberStartPos = 0;
     objectUnderTest.features = 0;
     Reflector.setField(objectUnderTest, "text", "");
     objectUnderTest.calendar = null;
@@ -1028,9 +1028,9 @@ public class JSONScannerTest {
     Reflector.setField(objectUnderTest, "len", 0);
     objectUnderTest.stringDefaultValue = "";
     objectUnderTest.pos = 0;
-    objectUnderTest.sp = 0;
+    objectUnderTest.sbufPos = 0;
     objectUnderTest.sbuf = null;
-    objectUnderTest.ch = '\u0000';
+    objectUnderTest.currentCursor = '\u0000';
     objectUnderTest.timeZone = null;
     objectUnderTest.eofPos = 0;
     char h0 = '2';
@@ -1070,7 +1070,7 @@ public class JSONScannerTest {
     objectUnderTest.hasSpecial = false;
     objectUnderTest.token = 0;
     objectUnderTest.locale = null;
-    objectUnderTest.np = 0;
+    objectUnderTest.numberStartPos = 0;
     objectUnderTest.features = 0;
     Reflector.setField(objectUnderTest, "text", "");
     objectUnderTest.calendar = null;
@@ -1079,9 +1079,9 @@ public class JSONScannerTest {
     Reflector.setField(objectUnderTest, "len", 0);
     objectUnderTest.stringDefaultValue = "";
     objectUnderTest.pos = 0;
-    objectUnderTest.sp = 0;
+    objectUnderTest.sbufPos = 0;
     objectUnderTest.sbuf = null;
-    objectUnderTest.ch = '\u0000';
+    objectUnderTest.currentCursor = '\u0000';
     objectUnderTest.timeZone = null;
     objectUnderTest.eofPos = 0;
     char h0 = '0';
@@ -1119,7 +1119,7 @@ public class JSONScannerTest {
     objectUnderTest.hasSpecial = false;
     objectUnderTest.token = 0;
     objectUnderTest.locale = null;
-    objectUnderTest.np = 0;
+    objectUnderTest.numberStartPos = 0;
     objectUnderTest.features = 0;
     Reflector.setField(objectUnderTest, "text", "");
     objectUnderTest.calendar = null;
@@ -1128,9 +1128,9 @@ public class JSONScannerTest {
     Reflector.setField(objectUnderTest, "len", 0);
     objectUnderTest.stringDefaultValue = "";
     objectUnderTest.pos = 0;
-    objectUnderTest.sp = 0;
+    objectUnderTest.sbufPos = 0;
     objectUnderTest.sbuf = null;
-    objectUnderTest.ch = '\u0000';
+    objectUnderTest.currentCursor = '\u0000';
     objectUnderTest.timeZone = null;
     objectUnderTest.eofPos = 0;
     char h0 = '1';
@@ -1171,7 +1171,7 @@ public class JSONScannerTest {
     objectUnderTest.hasSpecial = false;
     objectUnderTest.token = 0;
     objectUnderTest.locale = null;
-    objectUnderTest.np = 0;
+    objectUnderTest.numberStartPos = 0;
     objectUnderTest.features = 0;
     Reflector.setField(objectUnderTest, "text", "");
     objectUnderTest.calendar = null;
@@ -1180,9 +1180,9 @@ public class JSONScannerTest {
     Reflector.setField(objectUnderTest, "len", 0);
     objectUnderTest.stringDefaultValue = "";
     objectUnderTest.pos = 0;
-    objectUnderTest.sp = 0;
+    objectUnderTest.sbufPos = 0;
     objectUnderTest.sbuf = null;
-    objectUnderTest.ch = '\u0000';
+    objectUnderTest.currentCursor = '\u0000';
     objectUnderTest.timeZone = null;
     objectUnderTest.eofPos = 0;
     char h0 = '1';
@@ -1222,7 +1222,7 @@ public class JSONScannerTest {
     objectUnderTest.hasSpecial = false;
     objectUnderTest.token = 0;
     objectUnderTest.locale = null;
-    objectUnderTest.np = 0;
+    objectUnderTest.numberStartPos = 0;
     objectUnderTest.features = 0;
     Reflector.setField(objectUnderTest, "text", "");
     objectUnderTest.calendar = null;
@@ -1231,9 +1231,9 @@ public class JSONScannerTest {
     Reflector.setField(objectUnderTest, "len", 0);
     objectUnderTest.stringDefaultValue = "";
     objectUnderTest.pos = 0;
-    objectUnderTest.sp = 0;
+    objectUnderTest.sbufPos = 0;
     objectUnderTest.sbuf = null;
-    objectUnderTest.ch = '\u0000';
+    objectUnderTest.currentCursor = '\u0000';
     objectUnderTest.timeZone = null;
     objectUnderTest.eofPos = 0;
     char h0 = '1';
@@ -1278,7 +1278,7 @@ public class JSONScannerTest {
     objectUnderTest.hasSpecial = false;
     objectUnderTest.token = 0;
     objectUnderTest.locale = null;
-    objectUnderTest.np = 0;
+    objectUnderTest.numberStartPos = 0;
     objectUnderTest.features = 0;
     Reflector.setField(objectUnderTest, "text", "");
     objectUnderTest.calendar = null;
@@ -1287,9 +1287,9 @@ public class JSONScannerTest {
     Reflector.setField(objectUnderTest, "len", 0);
     objectUnderTest.stringDefaultValue = "";
     objectUnderTest.pos = 0;
-    objectUnderTest.sp = 0;
+    objectUnderTest.sbufPos = 0;
     objectUnderTest.sbuf = null;
-    objectUnderTest.ch = '\u0000';
+    objectUnderTest.currentCursor = '\u0000';
     objectUnderTest.timeZone = null;
     objectUnderTest.eofPos = 0;
     char h0 = '1';
@@ -1335,7 +1335,7 @@ public class JSONScannerTest {
     objectUnderTest.hasSpecial = false;
     objectUnderTest.token = 0;
     objectUnderTest.locale = null;
-    objectUnderTest.np = 0;
+    objectUnderTest.numberStartPos = 0;
     objectUnderTest.features = 0;
     Reflector.setField(objectUnderTest, "text", "");
     objectUnderTest.calendar = null;
@@ -1344,9 +1344,9 @@ public class JSONScannerTest {
     Reflector.setField(objectUnderTest, "len", 0);
     objectUnderTest.stringDefaultValue = "";
     objectUnderTest.pos = 0;
-    objectUnderTest.sp = 0;
+    objectUnderTest.sbufPos = 0;
     objectUnderTest.sbuf = null;
-    objectUnderTest.ch = '\u0000';
+    objectUnderTest.currentCursor = '\u0000';
     objectUnderTest.timeZone = null;
     objectUnderTest.eofPos = 0;
     char h0 = '1';
@@ -1392,7 +1392,7 @@ public class JSONScannerTest {
     objectUnderTest.hasSpecial = false;
     objectUnderTest.token = 0;
     objectUnderTest.locale = null;
-    objectUnderTest.np = 0;
+    objectUnderTest.numberStartPos = 0;
     objectUnderTest.features = 0;
     Reflector.setField(objectUnderTest, "text", "");
     objectUnderTest.calendar = null;
@@ -1401,9 +1401,9 @@ public class JSONScannerTest {
     Reflector.setField(objectUnderTest, "len", 0);
     objectUnderTest.stringDefaultValue = "";
     objectUnderTest.pos = 0;
-    objectUnderTest.sp = 0;
+    objectUnderTest.sbufPos = 0;
     objectUnderTest.sbuf = null;
-    objectUnderTest.ch = '\u0000';
+    objectUnderTest.currentCursor = '\u0000';
     objectUnderTest.timeZone = null;
     objectUnderTest.eofPos = 0;
     char h0 = '1';
@@ -1448,7 +1448,7 @@ public class JSONScannerTest {
     objectUnderTest.hasSpecial = false;
     objectUnderTest.token = 0;
     objectUnderTest.locale = null;
-    objectUnderTest.np = 0;
+    objectUnderTest.numberStartPos = 0;
     objectUnderTest.features = 0;
     Reflector.setField(objectUnderTest, "text", "");
     objectUnderTest.calendar = null;
@@ -1457,9 +1457,9 @@ public class JSONScannerTest {
     Reflector.setField(objectUnderTest, "len", 0);
     objectUnderTest.stringDefaultValue = "";
     objectUnderTest.pos = 0;
-    objectUnderTest.sp = 0;
+    objectUnderTest.sbufPos = 0;
     objectUnderTest.sbuf = null;
-    objectUnderTest.ch = '\u0000';
+    objectUnderTest.currentCursor = '\u0000';
     objectUnderTest.timeZone = null;
     objectUnderTest.eofPos = 0;
     char h0 = '1';
@@ -1505,7 +1505,7 @@ public class JSONScannerTest {
     objectUnderTest.hasSpecial = false;
     objectUnderTest.token = 0;
     objectUnderTest.locale = null;
-    objectUnderTest.np = 0;
+    objectUnderTest.numberStartPos = 0;
     objectUnderTest.features = 0;
     Reflector.setField(objectUnderTest, "text", "");
     objectUnderTest.calendar = null;
@@ -1514,9 +1514,9 @@ public class JSONScannerTest {
     Reflector.setField(objectUnderTest, "len", 0);
     objectUnderTest.stringDefaultValue = "";
     objectUnderTest.pos = 0;
-    objectUnderTest.sp = 0;
+    objectUnderTest.sbufPos = 0;
     objectUnderTest.sbuf = null;
-    objectUnderTest.ch = '\u0000';
+    objectUnderTest.currentCursor = '\u0000';
     objectUnderTest.timeZone = null;
     objectUnderTest.eofPos = 0;
     char h0 = '1';
@@ -1562,7 +1562,7 @@ public class JSONScannerTest {
     objectUnderTest.hasSpecial = false;
     objectUnderTest.token = 0;
     objectUnderTest.locale = null;
-    objectUnderTest.np = 0;
+    objectUnderTest.numberStartPos = 0;
     objectUnderTest.features = 0;
     Reflector.setField(objectUnderTest, "text", "");
     objectUnderTest.calendar = null;
@@ -1571,9 +1571,9 @@ public class JSONScannerTest {
     Reflector.setField(objectUnderTest, "len", 0);
     objectUnderTest.stringDefaultValue = "";
     objectUnderTest.pos = 0;
-    objectUnderTest.sp = 0;
+    objectUnderTest.sbufPos = 0;
     objectUnderTest.sbuf = null;
-    objectUnderTest.ch = '\u0000';
+    objectUnderTest.currentCursor = '\u0000';
     objectUnderTest.timeZone = null;
     objectUnderTest.eofPos = 0;
     char h0 = '1';
@@ -1615,7 +1615,7 @@ public class JSONScannerTest {
     objectUnderTest.hasSpecial = false;
     objectUnderTest.token = 0;
     objectUnderTest.locale = null;
-    objectUnderTest.np = 0;
+    objectUnderTest.numberStartPos = 0;
     objectUnderTest.features = 0;
     Reflector.setField(objectUnderTest, "text", "");
     objectUnderTest.calendar = null;
@@ -1624,9 +1624,9 @@ public class JSONScannerTest {
     Reflector.setField(objectUnderTest, "len", 0);
     objectUnderTest.stringDefaultValue = "";
     objectUnderTest.pos = 0;
-    objectUnderTest.sp = 0;
+    objectUnderTest.sbufPos = 0;
     objectUnderTest.sbuf = null;
-    objectUnderTest.ch = '\u0000';
+    objectUnderTest.currentCursor = '\u0000';
     objectUnderTest.timeZone = null;
     objectUnderTest.eofPos = 0;
     char h0 = '1';
@@ -1668,7 +1668,7 @@ public class JSONScannerTest {
     objectUnderTest.hasSpecial = false;
     objectUnderTest.token = 0;
     objectUnderTest.locale = null;
-    objectUnderTest.np = 0;
+    objectUnderTest.numberStartPos = 0;
     objectUnderTest.features = 0;
     Reflector.setField(objectUnderTest, "text", "");
     objectUnderTest.calendar = null;
@@ -1677,9 +1677,9 @@ public class JSONScannerTest {
     Reflector.setField(objectUnderTest, "len", 0);
     objectUnderTest.stringDefaultValue = "";
     objectUnderTest.pos = 0;
-    objectUnderTest.sp = 0;
+    objectUnderTest.sbufPos = 0;
     objectUnderTest.sbuf = null;
-    objectUnderTest.ch = '\u0000';
+    objectUnderTest.currentCursor = '\u0000';
     objectUnderTest.timeZone = null;
     objectUnderTest.eofPos = 0;
     char h0 = '1';
@@ -1715,7 +1715,7 @@ public class JSONScannerTest {
     objectUnderTest.token = 0;
     Locale locale = ((Locale)Reflector.getInstance("java.util.Locale"));
     objectUnderTest.locale = locale;
-    objectUnderTest.np = 0;
+    objectUnderTest.numberStartPos = 0;
     objectUnderTest.features = 0;
     Reflector.setField(objectUnderTest, "text", "((((");
     objectUnderTest.calendar = null;
@@ -1724,10 +1724,10 @@ public class JSONScannerTest {
     Reflector.setField(objectUnderTest, "len", 0);
     objectUnderTest.stringDefaultValue = "!!!!";
     objectUnderTest.pos = 0;
-    objectUnderTest.sp = 0;
+    objectUnderTest.sbufPos = 0;
     char[] charArray = { '\u0000' };
     objectUnderTest.sbuf = charArray;
-    objectUnderTest.ch = '\u0000';
+    objectUnderTest.currentCursor = '\u0000';
     objectUnderTest.timeZone = null;
     objectUnderTest.eofPos = 0;
 
@@ -1753,7 +1753,7 @@ public class JSONScannerTest {
     objectUnderTest.hasSpecial = false;
     objectUnderTest.token = 0;
     objectUnderTest.locale = null;
-    objectUnderTest.np = 0;
+    objectUnderTest.numberStartPos = 0;
     objectUnderTest.features = 0;
     Reflector.setField(objectUnderTest, "text", null);
     objectUnderTest.calendar = null;
@@ -1762,9 +1762,9 @@ public class JSONScannerTest {
     Reflector.setField(objectUnderTest, "len", 0);
     objectUnderTest.stringDefaultValue = null;
     objectUnderTest.pos = 0;
-    objectUnderTest.sp = 0;
+    objectUnderTest.sbufPos = 0;
     objectUnderTest.sbuf = null;
-    objectUnderTest.ch = '\u001a';
+    objectUnderTest.currentCursor = '\u001a';
     objectUnderTest.timeZone = null;
     objectUnderTest.eofPos = 0;
 
@@ -1790,7 +1790,7 @@ public class JSONScannerTest {
     objectUnderTest.hasSpecial = false;
     objectUnderTest.token = 0;
     objectUnderTest.locale = null;
-    objectUnderTest.np = 0;
+    objectUnderTest.numberStartPos = 0;
     objectUnderTest.features = 0;
     Reflector.setField(objectUnderTest, "text", null);
     objectUnderTest.calendar = null;
@@ -1799,9 +1799,9 @@ public class JSONScannerTest {
     Reflector.setField(objectUnderTest, "len", 0);
     objectUnderTest.stringDefaultValue = null;
     objectUnderTest.pos = 0;
-    objectUnderTest.sp = 0;
+    objectUnderTest.sbufPos = 0;
     objectUnderTest.sbuf = null;
-    objectUnderTest.ch = '\u0000';
+    objectUnderTest.currentCursor = '\u0000';
     objectUnderTest.timeZone = null;
     objectUnderTest.eofPos = 0;
 
@@ -1827,7 +1827,7 @@ public class JSONScannerTest {
     objectUnderTest.hasSpecial = false;
     objectUnderTest.token = 0;
     objectUnderTest.locale = null;
-    objectUnderTest.np = 0;
+    objectUnderTest.numberStartPos = 0;
     objectUnderTest.features = 0;
     Reflector.setField(objectUnderTest, "text", null);
     objectUnderTest.calendar = null;
@@ -1836,9 +1836,9 @@ public class JSONScannerTest {
     Reflector.setField(objectUnderTest, "len", 0);
     objectUnderTest.stringDefaultValue = null;
     objectUnderTest.pos = 0;
-    objectUnderTest.sp = 0;
+    objectUnderTest.sbufPos = 0;
     objectUnderTest.sbuf = null;
-    objectUnderTest.ch = '\u001a';
+    objectUnderTest.currentCursor = '\u001a';
     objectUnderTest.timeZone = null;
     objectUnderTest.eofPos = 0;
 

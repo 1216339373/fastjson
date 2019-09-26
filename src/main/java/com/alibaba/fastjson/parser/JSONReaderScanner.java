@@ -76,7 +76,7 @@ public final class JSONReaderScanner extends JSONLexerBase {
         bp = -1;
 
         next();
-        if (ch == 65279) { // utf8 bom
+        if (currentCursor == 65279) { // utf8 bom
             next();
         }
     }
@@ -88,7 +88,7 @@ public final class JSONReaderScanner extends JSONLexerBase {
     public final char charAt(int index) {
         if (index >= bufLength) {
             if (bufLength == -1) {
-                if (index < sp) {
+                if (index < sbufPos) {
                     return buf[index];
                 }
                 return EOI;
@@ -128,7 +128,7 @@ public final class JSONReaderScanner extends JSONLexerBase {
 
                 bufLength += rest;
                 index -= bp;
-                np -= bp;
+                numberStartPos -= bp;
                 bp = 0;
             }
         }
@@ -162,17 +162,17 @@ public final class JSONReaderScanner extends JSONLexerBase {
                 return EOI;
             }
 
-            if (sp > 0) {
+            if (sbufPos > 0) {
                 int offset;
-                offset = bufLength - sp;
-                if (ch == '"' && offset > 0) {
+                offset = bufLength - sbufPos;
+                if (currentCursor == '"' && offset > 0) {
                     offset--;
                 }
-                System.arraycopy(buf, offset, buf, 0, sp);
+                System.arraycopy(buf, offset, buf, 0, sbufPos);
             }
-            np = -1;
+            numberStartPos = -1;
 
-            index = bp = sp;
+            index = bp = sbufPos;
 
             try {
                 int startPos = bp;
@@ -193,13 +193,13 @@ public final class JSONReaderScanner extends JSONLexerBase {
             }
 
             if (bufLength == -1) {
-                return ch = EOI;
+                return currentCursor = EOI;
             }
 
             bufLength += bp;
         }
 
-        return ch = buf[index];
+        return currentCursor = buf[index];
     }
 
     protected final void copyTo(int offset, int count, char[] dest) {
@@ -221,7 +221,7 @@ public final class JSONReaderScanner extends JSONLexerBase {
             throw new JSONException("TODO");
         }
 
-        return IOUtils.decodeBase64(buf, np + 1, sp);
+        return IOUtils.decodeBase64(buf, numberStartPos + 1, sbufPos);
     }
 
     protected final void arrayCopy(int srcPos, char[] dest, int destPos, int length) {
@@ -233,17 +233,17 @@ public final class JSONReaderScanner extends JSONLexerBase {
      */
     public final String stringVal() {
         if (!hasSpecial) {
-            int offset = np + 1;
+            int offset = numberStartPos + 1;
             if (offset < 0) {
                 throw new IllegalStateException();
             }
-            if (offset > buf.length - sp) {
+            if (offset > buf.length - sbufPos) {
                 throw new IllegalStateException();
             }
-            return new String(buf, offset, sp);
+            return new String(buf, offset, sbufPos);
             // return text.substring(np + 1, np + 1 + sp);
         } else {
-            return new String(sbuf, 0, sp);
+            return new String(sbuf, 0, sbufPos);
         }
     }
 
@@ -269,13 +269,13 @@ public final class JSONReaderScanner extends JSONLexerBase {
     }
 
     public final String numberString() {
-        int offset = np;
+        int offset = numberStartPos;
         if (offset == -1) {
             offset = 0;
         }
-        char chLocal = charAt(offset + sp - 1);
+        char chLocal = charAt(offset + sbufPos - 1);
 
-        int sp = this.sp;
+        int sp = this.sbufPos;
         if (chLocal == 'L' || chLocal == 'S' || chLocal == 'B' || chLocal == 'F' || chLocal == 'D') {
             sp--;
         }
@@ -285,13 +285,13 @@ public final class JSONReaderScanner extends JSONLexerBase {
     }
 
     public final BigDecimal decimalValue() {
-        int offset = np;
+        int offset = numberStartPos;
         if (offset == -1) {
             offset = 0;
         }
-        char chLocal = charAt(offset + sp - 1);
+        char chLocal = charAt(offset + sbufPos - 1);
 
-        int sp = this.sp;
+        int sp = this.sbufPos;
         if (chLocal == 'L' || chLocal == 'S' || chLocal == 'B' || chLocal == 'F' || chLocal == 'D') {
             sp--;
         }
@@ -312,7 +312,7 @@ public final class JSONReaderScanner extends JSONLexerBase {
 
     @Override
     public boolean isEOF() {
-        return bufLength == -1 || bp == buf.length || ch == EOI && bp + 1 >= buf.length;
+        return bufLength == -1 || bp == buf.length || currentCursor == EOI && bp + 1 >= buf.length;
     }
 
     public final boolean isBlankInput() {
